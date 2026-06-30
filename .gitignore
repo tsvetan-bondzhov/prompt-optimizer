@@ -216,3 +216,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- Prompt Optimizer project-specific ---
+!.env.example
+app/web/static/dist/

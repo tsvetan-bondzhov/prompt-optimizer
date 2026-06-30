@@ -1,0 +1,120 @@
+"""Evaluation models.
+
+Covers the output of individual evaluation steps (:class:`PromptEvaluation`),
+the in-memory aggregation of a single evaluation point
+(:class:`EvaluationPoint`), the persisted point (:class:`EvaluationReport`), the
+grouping run (:class:`EvaluationRun`), and the merged summary
+(:class:`EvaluationSummary`).
+
+Field names match :mod:`app.db.repositories.reports`.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.models.common import new_id, utcnow
+
+
+class PromptEvaluation(BaseModel):
+    """Structured result of a single evaluation step.
+
+    Constraints (plan §5):
+      - ``score`` is an integer in ``[1, 10]``.
+      - ``strengths`` / ``weaknesses`` each contain 1–3 non-empty items.
+      - ``reasoning`` is a non-empty string.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    strengths: list[str] = Field(..., min_length=1, max_length=3)
+    weaknesses: list[str] = Field(..., min_length=1, max_length=3)
+    reasoning: str = Field(..., min_length=1)
+    score: int = Field(..., ge=1, le=10)
+    step_name: str | None = Field(
+        default=None, description="Name of the evaluation step that produced this."
+    )
+
+    @field_validator("strengths", "weaknesses")
+    @classmethod
+    def _no_blank_items(cls, value: list[str]) -> list[str]:
+        cleaned = [item.strip() for item in value]
+        if any(not item for item in cleaned):
+            raise ValueError("list items must be non-empty strings")
+        return cleaned
+
+    @field_validator("reasoning")
+    @classmethod
+    def _reasoning_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("reasoning must be a non-empty string")
+        return value
+
+
+class EvaluationPoint(BaseModel):
+    """One ``(test_case × execution_index)`` evaluation, in memory.
+
+    Holds the executed result, the per-step evaluations, and the aggregated
+    score for the point (default aggregation: mean of step scores).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    test_case_id: str
+    execution_index: int = Field(..., ge=0)
+    prompt_result: str = Field(..., description="The execution output text.")
+    step_evaluations: list[PromptEvaluation] = Field(default_factory=list)
+    aggregated_score: float = Field(..., ge=1, le=10)
+
+
+class EvaluationSummary(BaseModel):
+    """Merged strengths/weaknesses/reasoning across many evaluation points."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    strengths: list[str] = Field(default_factory=list)
+    weaknesses: list[str] = Field(default_factory=list)
+    reasoning: str = Field(default="")
+
+
+class EvaluationReport(BaseModel):
+    """A persisted evaluation point (one document per ``(test_case, i)``)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(default_factory=new_id)
+    date: datetime = Field(default_factory=utcnow)
+    run_id: str | None = Field(
+        default=None, description="Owning evaluation run id."
+    )
+    test_case_id: str
+    prompt: str = Field(..., description="The prompt text under evaluation.")
+    prompt_result: str = Field(..., description="The execution output text.")
+    score: float = Field(..., ge=1, le=10)
+    strengths: list[str] = Field(default_factory=list)
+    weaknesses: list[str] = Field(default_factory=list)
+    reasoning: str = Field(default="")
+    step_evaluations: list[PromptEvaluation] = Field(default_factory=list)
+
+
+class EvaluationRun(BaseModel):
+    """A grouping document for one evaluator invocation.
+
+    Standalone (UI) or loop-internal; reports link back via ``run_id``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(default_factory=new_id)
+    created_at: datetime = Field(default_factory=utcnow)
+    prompt: str = Field(..., description="The prompt text evaluated by this run.")
+    test_case_ids: list[str] = Field(default_factory=list)
+    executions_per_test_case: int = Field(default=1, ge=1)
+    avg_score: float | None = Field(
+        default=None, description="Mean aggregated score across all points."
+    )
+    status: str = Field(default="completed")
+    metadata: dict[str, Any] = Field(default_factory=dict)

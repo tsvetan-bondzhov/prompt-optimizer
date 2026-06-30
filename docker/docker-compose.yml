@@ -1,0 +1,46 @@
+# docker-compose for local one-command startup of the app + MongoDB.
+# Usage (from the repo root):
+#   docker compose -f docker/docker-compose.yml up --build
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      # Verify the mongod is accepting connections before app starts.
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  app:
+    build:
+      # Build context is the repo root so the Dockerfile can copy pyproject.toml
+      # and the app/ package. The Dockerfile lives under docker/.
+      context: ..
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    # Load developer overrides from a local .env at the repo root (optional —
+    # the file is not required to exist, e.g. when relying on defaults).
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      # Ensure the app talks to the mongo service on the compose network.
+      # This matches the config default (app/config.py: MONGO_URI).
+      MONGO_URI: mongodb://mongo:27017
+    ports:
+      - "8000:8000"
+    volumes:
+      # Optional: bind-mount user-pluggable implementations so developers can
+      # edit them without rebuilding the image.
+      - ../app/implementations:/app/app/implementations
+
+volumes:
+  mongo_data:
