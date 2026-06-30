@@ -25,10 +25,10 @@ Topologically sorted by declared dependencies:
 | 05 | Core Abstractions & Registry | Foundation | 04 | done |
 | 06 | LLM Runner (Claude Code) | Engine | 05 | done |
 | 07 | Reference Implementations | Engine | 05, 06 | done |
-| 08 | Evaluator Service | Engine | 03, 04, 05 | in_progress |
-| 10 | Summarization | Engine | 05, 06 | none |
+| 08 | Evaluator Service | Engine | 03, 04, 05 | done |
+| 10 | Summarization | Engine | 05, 06 | done |
 | 09 | Optimizer Service | Engine | 08, 10 | none |
-| 11 | Progress Tracking (SSE) | Surface | 03 | none |
+| 11 | Progress Tracking (SSE) | Surface | 03 | done |
 | 12 | FastAPI App Orchestration | Surface | 08, 09, 11 | none |
 | 13 | API Routes | Surface | 12 | none |
 | 14 | Web UI | Surface | 13 | none |
@@ -43,3 +43,6 @@ Topologically sorted by declared dependencies:
 - **Task 05** — PASS. `app/core/interfaces.py` (ABCs: PromptExecutor/EvaluationStep/PromptImprover/Summarizer/LLMRunner + PrepareEvaluation/Aggregator protocols, mean_aggregator), `app/core/registry.py` (register/resolve + settings-driven get_* with clear errors), `app/core/bootstrap.py`. Concrete impls correctly deferred. Verified ABCs non-instantiable + resolver behavior.
 - **Task 06** — PASS. `app/llm/base.py` (LLMRunnerError, compose_prompt), `app/llm/claude_code.py` (`ClaudeCodeRunner` — async `claude -p` via create_subprocess_exec, timeout/non-zero/missing-binary handling), `app/llm/fake.py` (`FakeLLMRunner`). Registered `claude_code`+`fake` in `register_builtins()`. Verified resolution with mocked subprocess.
 - **Task 07** — PASS. `app/implementations/executor.py` (`ReferencePromptExecutor` via get_llm_runner, `# >>> USER` markers), `evaluation_steps.py` (`KeywordCoverageStep`, `ResponseQualityStep` — deterministic, no LLM), `prepare.py` (`prepare_evaluation()`). Registered under `default` via `register_builtins()`. End-to-end verified with FakeLLMRunner. NOTE: improver/summarizer steps in this task file intentionally deferred to Task 10.
+- **Task 08** — PASS. `app/services/evaluator.py` (`EvaluatorService`, `EvaluationRunResult`). Produces exactly `N×len(test_cases)` reports, mean `avg_score`, per-step evals persisted, standalone `EvaluationRun` lifecycle, progress hook (sync/async), empty/`N<1` ValueErrors, per-point failure isolation (failed report + error surfaced). Imports clean in venv.
+- **Task 10** — PASS. `app/services/summarizer.py` (`SummarizerService`, accepts `EvaluationPoint`|`PromptEvaluation`, flattens `step_evaluations`), `app/implementations/summarizer.py` (`LLMSummarizer`=`default` w/ tolerant JSON parse + frequency fallback; `FrequencySummarizer`=`frequency`, deterministic, zero LLM, top-K=3). Registered in `register_builtins()`. Verified: frequency 0 LLM calls, bounded output, default falls back on parse failure.
+- **Task 11** — PASS. `app/services/progress.py` (`ProgressTracker`, `ProgressState`, `ProgressEvent`/`ProgressEventType`). Per-`run_id` pub/sub via `asyncio.Queue` (multi-subscriber), `snapshot()`, `stream()` (terminates on `run_completed`), bounded buffer (max_events=200), `make_hook()` ProgressHook-compatible w/ evaluator-dict normalization (`executed→step_completed`, `completed→run_completed`, `error→error`). Persists via injected `OptimizationRunRepository.update_progress` or callback; graceful no-op + error-safe. Verified multi-subscriber + persistence paths.

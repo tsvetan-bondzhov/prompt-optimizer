@@ -53,7 +53,13 @@ def register_builtins() -> None:
     # import-time side effects out of the core package.
     import app.implementations  # noqa: F401
 
-    # NOTE: reference improver / summarizer are registered by their own modules
-    # (Task 10).
+    # Reference summarizers (Task 10): importing the module fires its
+    # module-level registrations — the LLM-backed summarizer under
+    # ("summarizer", "default") and the deterministic frequency fallback under
+    # ("summarizer", "frequency"). Imported lazily to keep import-time side
+    # effects out of the core package.
+    import app.implementations.summarizer  # noqa: F401
+
+    # NOTE: reference improver is registered by its own module (Task 09).
 
     _done = True
