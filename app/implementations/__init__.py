@@ -11,6 +11,11 @@ from __future__ import annotations
 
 # Import for registration side effects. Order matters: ``prepare`` imports the
 # step classes from ``evaluation_steps``.
-from app.implementations import evaluation_steps, executor, prepare  # noqa: F401
+from app.implementations import (  # noqa: F401
+    evaluation_steps,
+    executor,
+    json_evaluation_steps,
+    prepare,
+)
 
-__all__ = ["evaluation_steps", "executor", "prepare"]
+__all__ = ["evaluation_steps", "executor", "json_evaluation_steps", "prepare"]
