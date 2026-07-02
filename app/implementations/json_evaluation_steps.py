@@ -7,18 +7,21 @@ Two steps for prompts whose output is expected to be JSON:
   ``test_case.evaluation_criteria["json_schema"]``.
 * :class:`JsonExpectedMatchStep` — parses ``result.text`` as JSON and compares
   it to an expected JSON object read from
-  ``test_case.evaluation_criteria["expected_json"]``. Fields missing from the
-  output (or ``null`` in it) are **not** treated as mismatches — they are
-  excluded from the comparison; the score is the percentage of the remaining
-  expected fields whose values match.
+  ``test_case.evaluation_criteria["expected_json"]``. A field is ignored only
+  when its value is ``null`` in the *expected* object; an expected non-null
+  field that is missing or ``null`` in the output counts as a mismatch. The
+  score is the percentage of compared expected fields that matched.
 
 Use them by returning instances from your ``prepare_evaluation()`` factory::
 
     def prepare_evaluation() -> list[EvaluationStep]:
         return [JsonSchemaValidationStep(), JsonExpectedMatchStep()]
 
-Both steps tolerate output wrapped in a Markdown code fence (``` or ```json),
-which LLMs commonly produce around JSON.
+Markdown code fences: by default the output must be **pure JSON** — a fenced
+block (```json ... ```) fails parsing and scores ``1``. Set the
+``JSON_EVAL_ALLOW_MARKDOWN=true`` environment variable (or pass
+``allow_markdown_fence=True`` to a step's constructor, which takes precedence)
+to tolerate fenced output.
 """
 
 from __future__ import annotations
@@ -29,6 +32,7 @@ from typing import Any, Optional
 
 from jsonschema import Draft202012Validator
 
+from app.config import get_settings
 from app.core.interfaces import EvaluationStep
 from app.implementations.evaluation_steps import clamp_score, trim
 from app.models import PromptEvaluation, PromptResult, TestCase
@@ -37,31 +41,84 @@ __all__ = ["JsonSchemaValidationStep", "JsonExpectedMatchStep"]
 
 _CODE_FENCE = re.compile(r"^```[a-zA-Z0-9_-]*\s*\n(.*)\n```\s*$", re.DOTALL)
 
+# Sentinel distinguishing "key absent from the output" from an explicit null.
+_MISSING = object()
 
-def parse_json_result(text: str) -> tuple[Optional[Any], Optional[str]]:
-    """Parse ``text`` as JSON, unwrapping a surrounding Markdown code fence.
 
+def parse_json_result(
+    text: str, *, allow_fence: bool = False
+) -> tuple[Optional[Any], Optional[str]]:
+    """Parse ``text`` as JSON.
+
+    :param allow_fence: When true, a surrounding Markdown code fence
+        (```json ... ```) is unwrapped before parsing. When false the text
+        must be pure JSON.
     :returns: ``(value, None)`` on success, ``(None, error message)`` on failure.
     """
 
     candidate = text.strip()
-    fenced = _CODE_FENCE.match(candidate)
-    if fenced:
-        candidate = fenced.group(1).strip()
+    if allow_fence:
+        fenced = _CODE_FENCE.match(candidate)
+        if fenced:
+            candidate = fenced.group(1).strip()
     try:
         return json.loads(candidate), None
     except json.JSONDecodeError as exc:
         return None, str(exc)
 
 
-class JsonSchemaValidationStep(EvaluationStep):
+class _JsonStepBase(EvaluationStep):
+    """Shared fence-tolerance resolution for the JSON steps."""
+
+    def __init__(self, *, allow_markdown_fence: Optional[bool] = None) -> None:
+        """:param allow_markdown_fence: Override for Markdown-fence tolerance.
+        ``None`` (default) defers to the ``JSON_EVAL_ALLOW_MARKDOWN`` setting.
+        """
+
+        self._allow_markdown_fence = allow_markdown_fence
+
+    @property
+    def allow_fence(self) -> bool:
+        if self._allow_markdown_fence is not None:
+            return self._allow_markdown_fence
+        return get_settings().JSON_EVAL_ALLOW_MARKDOWN
+
+    def _parse(self, result: PromptResult) -> tuple[Optional[Any], Optional[str]]:
+        return parse_json_result(result.text, allow_fence=self.allow_fence)
+
+    def _parse_failure(
+        self, result: PromptResult, parse_error: str
+    ) -> PromptEvaluation:
+        fenced = _CODE_FENCE.match(result.text.strip()) is not None
+        if fenced and not self.allow_fence:
+            weakness = (
+                "Output is wrapped in a Markdown code fence instead of pure JSON"
+            )
+            reasoning = (
+                "Pure JSON is expected (JSON_EVAL_ALLOW_MARKDOWN is disabled) "
+                f"but the output is Markdown-fenced; parsing failed: {parse_error}"
+            )
+        else:
+            weakness = "Output is not valid JSON"
+            reasoning = f"JSON parsing failed: {parse_error}"
+        return PromptEvaluation(
+            strengths=["Output was produced"],
+            weaknesses=[weakness],
+            reasoning=reasoning,
+            score=1,
+            step_name=self.name,
+        )
+
+
+class JsonSchemaValidationStep(_JsonStepBase):
     """Validate the JSON output against a schema from the evaluation criteria.
 
     The schema is read from ``test_case.evaluation_criteria["json_schema"]``
     (or legacy ``"schema"``). Scoring: valid output scores ``10``; output that
-    is not parseable as JSON scores ``1``; schema violations subtract 3 points
-    each from 10 (floored at 1). When no schema is configured the step returns
-    a neutral ``5``, documenting that nothing could be checked.
+    is not parseable as pure JSON (including Markdown-fenced output unless
+    fence tolerance is enabled) scores ``1``; schema violations subtract 3
+    points each from 10 (floored at 1). When no schema is configured the step
+    returns a neutral ``5``, documenting that nothing could be checked.
     """
 
     name = "json_schema"
@@ -88,15 +145,9 @@ class JsonSchemaValidationStep(EvaluationStep):
                 step_name=self.name,
             )
 
-        parsed, parse_error = parse_json_result(result.text)
+        parsed, parse_error = self._parse(result)
         if parse_error is not None:
-            return PromptEvaluation(
-                strengths=["Output was produced"],
-                weaknesses=["Output is not valid JSON"],
-                reasoning=f"JSON parsing failed: {parse_error}",
-                score=1,
-                step_name=self.name,
-            )
+            return self._parse_failure(result, parse_error)
 
         validator = Draft202012Validator(schema)
         errors = sorted(validator.iter_errors(parsed), key=lambda e: e.json_path)
@@ -127,8 +178,8 @@ class JsonSchemaValidationStep(EvaluationStep):
         )
 
 
-class JsonExpectedMatchStep(EvaluationStep):
-    """Compare the JSON output to an expected JSON object, leniently.
+class JsonExpectedMatchStep(_JsonStepBase):
+    """Compare the JSON output to an expected JSON object.
 
     The expected object is read from
     ``test_case.evaluation_criteria["expected_json"]`` (or legacy
@@ -136,16 +187,16 @@ class JsonExpectedMatchStep(EvaluationStep):
     scalars and arrays are leaves compared by equality) fall into three
     buckets:
 
+    * **ignored** — the field's value is ``null`` in the *expected* object
+      (the expectation itself says "don't care");
     * **matched** — present in the output with an equal value;
-    * **ignored** — missing from the output or ``null`` in it (also: ``null``
-      in the expected object). Per the lenient contract these are *not*
-      mismatches and are excluded from the score;
-    * **mismatched** — present and non-null in the output but unequal.
+    * **mismatched** — unequal value, **or** missing / ``null`` in the output
+      while the expected value is non-null.
 
-    Score: the percentage of compared (non-ignored) fields that matched,
-    mapped linearly onto ``[1, 10]``. Unparseable output scores ``1``; when
-    nothing is comparable (everything ignored) the step returns a neutral
-    ``5``.
+    Score: the percentage of compared (non-ignored) expected fields that
+    matched, mapped linearly onto ``[1, 10]``. Unparseable output scores
+    ``1``; when every expected field is ``null`` (nothing comparable) the step
+    returns a neutral ``5``.
     """
 
     name = "json_expected_match"
@@ -172,15 +223,9 @@ class JsonExpectedMatchStep(EvaluationStep):
                 step_name=self.name,
             )
 
-        parsed, parse_error = parse_json_result(result.text)
+        parsed, parse_error = self._parse(result)
         if parse_error is not None:
-            return PromptEvaluation(
-                strengths=["Output was produced"],
-                weaknesses=["Output is not valid JSON"],
-                reasoning=f"JSON parsing failed: {parse_error}",
-                score=1,
-                step_name=self.name,
-            )
+            return self._parse_failure(result, parse_error)
         if not isinstance(parsed, dict):
             return PromptEvaluation(
                 strengths=["Output is valid JSON"],
@@ -204,12 +249,12 @@ class JsonExpectedMatchStep(EvaluationStep):
                 strengths=["Output is a valid JSON object"],
                 weaknesses=[
                     "No expected fields were comparable "
-                    "(all missing or null in the output)"
+                    "(all null in the expected object)"
                 ],
                 reasoning=(
-                    f"All {len(ignored)} expected field(s) were missing or null "
-                    "in the output; per the lenient contract these are not "
-                    "mismatches, but nothing could be verified — neutral score."
+                    f"All {len(ignored)} expected field(s) are null in the "
+                    "expected object, so nothing could be verified — neutral "
+                    "score."
                 ),
                 score=5,
                 step_name=self.name,
@@ -222,13 +267,16 @@ class JsonExpectedMatchStep(EvaluationStep):
             [f"Field {path} matches the expected value" for path in matched]
         ) or ["Output is a valid JSON object"]
         weaknesses = trim(
-            [f"Field {path} does not match the expected value" for path in mismatched]
+            [
+                f"Field {path} is missing/null or does not match the expected value"
+                for path in mismatched
+            ]
         ) or ["All compared fields match the expected values"]
 
         reasoning = (
             f"Matched {len(matched)}/{compared} compared expected field(s) "
-            f"({ratio:.0%}); {len(ignored)} field(s) ignored as missing/null. "
-            "Score scaled linearly onto [1, 10]."
+            f"({ratio:.0%}); {len(ignored)} field(s) ignored (null in the "
+            "expected object). Score scaled linearly onto [1, 10]."
         )
 
         return PromptEvaluation(
@@ -248,13 +296,19 @@ class JsonExpectedMatchStep(EvaluationStep):
         ignored: list[str],
         mismatched: list[str],
     ) -> None:
-        """Recursively bucket expected leaves as matched/ignored/mismatched."""
+        """Recursively bucket expected leaves as matched/ignored/mismatched.
+
+        ``actual`` may be the ``_MISSING`` sentinel when the key was absent
+        from the output. Only a ``null`` in the *expected* object makes a
+        field ignorable; a missing/null *actual* against a non-null
+        expectation is a mismatch.
+        """
 
         if expected is None:
             ignored.append(path)
             return
-        if actual is None:
-            ignored.append(path)
+        if actual is _MISSING or actual is None:
+            mismatched.append(path)
             return
 
         if isinstance(expected, dict):
@@ -262,14 +316,10 @@ class JsonExpectedMatchStep(EvaluationStep):
                 mismatched.append(path)
                 return
             for key, expected_value in expected.items():
-                child_path = f"{path}.{key}"
-                if key not in actual:
-                    ignored.append(child_path)
-                    continue
                 self._compare(
                     expected_value,
-                    actual[key],
-                    child_path,
+                    actual.get(key, _MISSING),
+                    f"{path}.{key}",
                     matched,
                     ignored,
                     mismatched,

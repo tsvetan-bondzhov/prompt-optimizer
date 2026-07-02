@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     DEFAULT_TARGET_SCORE: float = 9.0
     DEFAULT_MAX_ITERATIONS: int = 10
 
+    # --- JSON evaluation steps --------------------------------------------
+    # When true, the JSON evaluation steps tolerate output wrapped in a
+    # Markdown code fence (```json ... ```). When false (default), pure JSON
+    # is expected and fenced output fails parsing (scores 1).
+    JSON_EVAL_ALLOW_MARKDOWN: bool = False
+
     # --- Optimizer prompt -------------------------------------------------
     IMPROVER_SYSTEM_PROMPT: str = DEFAULT_IMPROVER_SYSTEM_PROMPT
 

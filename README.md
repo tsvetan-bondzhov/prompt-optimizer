@@ -97,6 +97,7 @@ Settings load from environment variables or `.env`
 | `DEFAULT_TARGET_SCORE` | `9.0` | Loop stop threshold |
 | `DEFAULT_MAX_ITERATIONS` | `10` | Loop stop limit |
 | `IMPROVER_SYSTEM_PROMPT` | built-in constant | Optimizer system prompt |
+| `JSON_EVAL_ALLOW_MARKDOWN` | `false` | Let the JSON evaluation steps accept Markdown-fenced output |
 | `LOG_LEVEL` | `INFO` | Logging level |
 
 Set `ACTIVE_LLM_RUNNER=fake` for fully offline operation (deterministic echo

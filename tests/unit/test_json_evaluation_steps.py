@@ -29,20 +29,62 @@ SCHEMA = {
     "required": ["name", "age"],
 }
 
+FENCED = '```json\n{"name": "Ada", "age": 36}\n```'
+
 
 # -- parse_json_result -------------------------------------------------------
 
 
-def test_parse_json_unwraps_code_fence():
-    value, error = parse_json_result('```json\n{"a": 1}\n```')
+def test_parse_json_pure_by_default():
+    value, error = parse_json_result('{"a": 1}')
     assert error is None
     assert value == {"a": 1}
 
 
-def test_parse_json_reports_error():
-    value, error = parse_json_result("not json")
+def test_parse_json_rejects_fence_by_default():
+    value, error = parse_json_result('```json\n{"a": 1}\n```')
     assert value is None
     assert error
+
+
+def test_parse_json_unwraps_fence_when_allowed():
+    value, error = parse_json_result('```json\n{"a": 1}\n```', allow_fence=True)
+    assert error is None
+    assert value == {"a": 1}
+
+
+# -- Markdown fence configuration ---------------------------------------------
+
+
+async def test_fenced_output_scores_1_by_default():
+    step = JsonSchemaValidationStep()
+    evaluation = await step.evaluate(
+        PromptResult(text=FENCED), make_case({"json_schema": SCHEMA})
+    )
+    assert evaluation.score == 1
+    assert any("Markdown" in w for w in evaluation.weaknesses)
+
+
+async def test_fenced_output_accepted_when_enabled():
+    step = JsonSchemaValidationStep(allow_markdown_fence=True)
+    evaluation = await step.evaluate(
+        PromptResult(text=FENCED), make_case({"json_schema": SCHEMA})
+    )
+    assert evaluation.score == 10
+
+
+async def test_fence_setting_from_environment(monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.setenv("JSON_EVAL_ALLOW_MARKDOWN", "true")
+    get_settings.cache_clear()
+    try:
+        evaluation = await JsonSchemaValidationStep().evaluate(
+            PromptResult(text=FENCED), make_case({"json_schema": SCHEMA})
+        )
+        assert evaluation.score == 10
+    finally:
+        get_settings.cache_clear()
 
 
 # -- JsonSchemaValidationStep -------------------------------------------------
@@ -95,16 +137,29 @@ async def test_expected_full_match_scores_10():
     assert evaluation.score == 10
 
 
-async def test_expected_missing_and_null_fields_are_ignored():
+async def test_expected_null_fields_are_ignored():
+    step = JsonExpectedMatchStep()
+    # "city" is null in the EXPECTED object -> ignored, whatever the output has.
+    expected = {"name": "Ada", "city": None}
+    evaluation = await step.evaluate(
+        result_of({"name": "Ada"}), make_case({"expected_json": expected})
+    )
+    assert evaluation.score == 10
+    assert "1 field(s) ignored" in evaluation.reasoning
+
+
+async def test_missing_or_null_in_output_is_mismatch():
     step = JsonExpectedMatchStep()
     expected = {"name": "Ada", "age": 36, "city": "London"}
-    # age missing, city null -> ignored; name matches -> 100% of compared.
+    # name matches; age missing in output; city null in output -> 2 mismatches.
     evaluation = await step.evaluate(
         result_of({"name": "Ada", "city": None}),
         make_case({"expected_json": expected}),
     )
-    assert evaluation.score == 10
-    assert "2 field(s) ignored" in evaluation.reasoning
+    # 1/3 matched -> 1 + 9/3 = 4.
+    assert evaluation.score == 4
+    assert any("$.age" in w for w in evaluation.weaknesses)
+    assert any("$.city" in w for w in evaluation.weaknesses)
 
 
 async def test_expected_mismatch_percentage_scoring():
@@ -118,10 +173,10 @@ async def test_expected_mismatch_percentage_scoring():
     assert any("$.b" in w for w in evaluation.weaknesses)
 
 
-async def test_expected_nothing_comparable_is_neutral():
+async def test_expected_all_null_is_neutral():
     step = JsonExpectedMatchStep()
     evaluation = await step.evaluate(
-        result_of({}), make_case({"expected_json": {"a": 1, "b": 2}})
+        result_of({"a": 1}), make_case({"expected_json": {"a": None, "b": None}})
     )
     assert evaluation.score == 5
 
@@ -141,3 +196,13 @@ async def test_expected_nested_type_mismatch():
         make_case({"expected_json": {"role": {"title": "engineer"}}}),
     )
     assert evaluation.score == 1
+
+
+async def test_expected_nested_null_ignored_inside_object():
+    step = JsonExpectedMatchStep()
+    expected = {"role": {"title": "engineer", "level": None}}
+    evaluation = await step.evaluate(
+        result_of({"role": {"title": "engineer"}}),
+        make_case({"expected_json": expected}),
+    )
+    assert evaluation.score == 10
