@@ -131,10 +131,45 @@ async def test_expected_full_match_scores_10():
     step = JsonExpectedMatchStep()
     expected = {"name": "Ada", "role": {"title": "engineer"}}
     evaluation = await step.evaluate(
-        result_of({"name": "Ada", "role": {"title": "engineer"}, "extra": 1}),
+        result_of({"name": "Ada", "role": {"title": "engineer"}}),
         make_case({"expected_json": expected}),
     )
     assert evaluation.score == 10
+
+
+async def test_unexpected_output_fields_are_mismatches():
+    step = JsonExpectedMatchStep()
+    expected = {"name": "Ada"}
+    evaluation = await step.evaluate(
+        result_of({"name": "Ada", "extra": 1}),
+        make_case({"expected_json": expected}),
+    )
+    # name matched, extra unexpected -> 1/2 -> 1 + 4.5 -> 6.
+    assert evaluation.score == 6
+    assert any(
+        "$.extra" in w and "unexpected" in w for w in evaluation.weaknesses
+    )
+
+
+async def test_unexpected_null_output_field_is_ignored():
+    step = JsonExpectedMatchStep()
+    evaluation = await step.evaluate(
+        result_of({"name": "Ada", "extra": None}),
+        make_case({"expected_json": {"name": "Ada"}}),
+    )
+    # extra is null in the output and missing in expected -> ignored.
+    assert evaluation.score == 10
+
+
+async def test_expected_null_with_output_value_is_mismatch():
+    step = JsonExpectedMatchStep()
+    evaluation = await step.evaluate(
+        result_of({"a": 1, "b": 2}),
+        make_case({"expected_json": {"a": 1, "b": None}}),
+    )
+    # a matched; b expected null but output has a value -> 1/2 -> 6.
+    assert evaluation.score == 6
+    assert any("$.b" in w and "expected null" in w for w in evaluation.weaknesses)
 
 
 async def test_expected_null_fields_are_ignored():
@@ -173,12 +208,63 @@ async def test_expected_mismatch_percentage_scoring():
     assert any("$.b" in w for w in evaluation.weaknesses)
 
 
-async def test_expected_all_null_is_neutral():
+async def test_nothing_comparable_is_neutral():
     step = JsonExpectedMatchStep()
+    # Both sides null/missing everywhere -> everything ignored -> neutral.
     evaluation = await step.evaluate(
-        result_of({"a": 1}), make_case({"expected_json": {"a": None, "b": None}})
+        result_of({"a": None}), make_case({"expected_json": {"a": None, "b": None}})
     )
     assert evaluation.score == 5
+
+
+async def test_arrays_of_objects_compared_element_wise():
+    step = JsonExpectedMatchStep()
+    expected = {
+        "items": [
+            {"sku": "A", "qty": 1},
+            {"sku": "B", "qty": 2},
+        ]
+    }
+    # First element matches fully; second has a wrong qty -> 3/4 matched.
+    evaluation = await step.evaluate(
+        result_of({"items": [{"sku": "A", "qty": 1}, {"sku": "B", "qty": 99}]}),
+        make_case({"expected_json": expected}),
+    )
+    # 3/4 -> 1 + 6.75 = 7.75 -> 8.
+    assert evaluation.score == 8
+    assert any("$.items[1].qty" in w for w in evaluation.weaknesses)
+
+
+async def test_array_length_mismatch_flagged():
+    step = JsonExpectedMatchStep()
+    expected = {"tags": ["a", "b"]}
+    # Missing second element -> mismatch at $.tags[1]; extra third would too.
+    evaluation = await step.evaluate(
+        result_of({"tags": ["a"]}), make_case({"expected_json": expected})
+    )
+    assert evaluation.score == 6  # 1/2 matched
+    assert any("$.tags[1]" in w for w in evaluation.weaknesses)
+
+
+async def test_array_extra_element_flagged_as_unexpected():
+    step = JsonExpectedMatchStep()
+    evaluation = await step.evaluate(
+        result_of({"tags": ["a", "b"]}),
+        make_case({"expected_json": {"tags": ["a"]}}),
+    )
+    assert evaluation.score == 6  # 1/2 matched
+    assert any(
+        "$.tags[1]" in w and "unexpected" in w for w in evaluation.weaknesses
+    )
+
+
+async def test_array_vs_non_array_is_mismatch():
+    step = JsonExpectedMatchStep()
+    evaluation = await step.evaluate(
+        result_of({"tags": "a,b"}), make_case({"expected_json": {"tags": ["a"]}})
+    )
+    assert evaluation.score == 1
+    assert any("expected an array" in w for w in evaluation.weaknesses)
 
 
 async def test_expected_unparseable_and_non_object_score_1():

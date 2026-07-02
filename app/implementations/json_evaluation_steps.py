@@ -7,10 +7,10 @@ Two steps for prompts whose output is expected to be JSON:
   ``test_case.evaluation_criteria["json_schema"]``.
 * :class:`JsonExpectedMatchStep` — parses ``result.text`` as JSON and compares
   it to an expected JSON object read from
-  ``test_case.evaluation_criteria["expected_json"]``. A field is ignored only
-  when its value is ``null`` in the *expected* object; an expected non-null
-  field that is missing or ``null`` in the output counts as a mismatch. The
-  score is the percentage of compared expected fields that matched.
+  ``test_case.evaluation_criteria["expected_json"]``. Objects are traversed in
+  both directions (unexpected output fields are mismatches), arrays are
+  compared element-wise, and a path is ignored only when it is null/missing on
+  both sides. The score is the percentage of compared fields that matched.
 
 Use them by returning instances from your ``prepare_evaluation()`` factory::
 
@@ -183,19 +183,21 @@ class JsonExpectedMatchStep(_JsonStepBase):
 
     The expected object is read from
     ``test_case.evaluation_criteria["expected_json"]`` (or legacy
-    ``"expected"``). Expected leaf fields (nested objects are traversed;
-    scalars and arrays are leaves compared by equality) fall into three
-    buckets:
+    ``"expected"``). Objects are traversed key-by-key in **both** directions,
+    arrays element-wise by index, and scalars compared by equality. Each
+    compared path falls into one of three buckets:
 
-    * **ignored** — the field's value is ``null`` in the *expected* object
-      (the expectation itself says "don't care");
-    * **matched** — present in the output with an equal value;
-    * **mismatched** — unequal value, **or** missing / ``null`` in the output
-      while the expected value is non-null.
+    * **ignored** — null/missing on **both** sides (the expectation says
+      "don't care" and the output agrees);
+    * **matched** — present on both sides with an equal value;
+    * **mismatched** — unequal value; missing/``null`` in the output while
+      the expected value is non-null; a value in the output where ``null``
+      was expected; or a field present in the output that does not exist in
+      the expected object.
 
-    Score: the percentage of compared (non-ignored) expected fields that
-    matched, mapped linearly onto ``[1, 10]``. Unparseable output scores
-    ``1``; when every expected field is ``null`` (nothing comparable) the step
+    Score: the percentage of compared (non-ignored) fields that matched,
+    mapped linearly onto ``[1, 10]``. Unparseable output scores ``1``; when
+    nothing is comparable (all paths null/missing on both sides) the step
     returns a neutral ``5``.
     """
 
@@ -248,13 +250,13 @@ class JsonExpectedMatchStep(_JsonStepBase):
             return PromptEvaluation(
                 strengths=["Output is a valid JSON object"],
                 weaknesses=[
-                    "No expected fields were comparable "
-                    "(all null in the expected object)"
+                    "No fields were comparable "
+                    "(all null/missing on both sides)"
                 ],
                 reasoning=(
-                    f"All {len(ignored)} expected field(s) are null in the "
-                    "expected object, so nothing could be verified — neutral "
-                    "score."
+                    f"All {len(ignored)} field(s) are null/missing in both the "
+                    "expected object and the output, so nothing could be "
+                    "verified — neutral score."
                 ),
                 score=5,
                 step_name=self.name,
@@ -267,16 +269,13 @@ class JsonExpectedMatchStep(_JsonStepBase):
             [f"Field {path} matches the expected value" for path in matched]
         ) or ["Output is a valid JSON object"]
         weaknesses = trim(
-            [
-                f"Field {path} is missing/null or does not match the expected value"
-                for path in mismatched
-            ]
+            [f"Field {message}" for message in mismatched]
         ) or ["All compared fields match the expected values"]
 
         reasoning = (
-            f"Matched {len(matched)}/{compared} compared expected field(s) "
-            f"({ratio:.0%}); {len(ignored)} field(s) ignored (null in the "
-            "expected object). Score scaled linearly onto [1, 10]."
+            f"Matched {len(matched)}/{compared} compared field(s) "
+            f"({ratio:.0%}); {len(ignored)} field(s) ignored (null/missing on "
+            "both sides). Score scaled linearly onto [1, 10]."
         )
 
         return PromptEvaluation(
@@ -296,24 +295,38 @@ class JsonExpectedMatchStep(_JsonStepBase):
         ignored: list[str],
         mismatched: list[str],
     ) -> None:
-        """Recursively bucket expected leaves as matched/ignored/mismatched.
+        """Recursively bucket fields as matched/ignored/mismatched.
 
-        ``actual`` may be the ``_MISSING`` sentinel when the key was absent
-        from the output. Only a ``null`` in the *expected* object makes a
-        field ignorable; a missing/null *actual* against a non-null
-        expectation is a mismatch.
+        Either side may be the ``_MISSING`` sentinel (key absent on that
+        side). A path is ignored only when **both** sides are null/missing.
+        Objects are traversed key-by-key in both directions (keys present in
+        the output but absent from the expected object are mismatches);
+        arrays are compared element-wise by index. ``mismatched`` entries are
+        human-readable messages that include the path.
         """
 
-        if expected is None:
-            ignored.append(path)
-            return
-        if actual is _MISSING or actual is None:
-            mismatched.append(path)
+        expected_empty = expected is None or expected is _MISSING
+        actual_empty = actual is None or actual is _MISSING
+        if expected_empty or actual_empty:
+            if expected_empty and actual_empty:
+                ignored.append(path)
+            elif expected_empty and expected is _MISSING:
+                mismatched.append(
+                    f"{path}: unexpected field not present in the expected JSON"
+                )
+            elif expected_empty:
+                mismatched.append(
+                    f"{path}: expected null but the output has a value"
+                )
+            else:
+                mismatched.append(f"{path}: missing or null in the output")
             return
 
         if isinstance(expected, dict):
             if not isinstance(actual, dict):
-                mismatched.append(path)
+                mismatched.append(
+                    f"{path}: expected an object, got {type(actual).__name__}"
+                )
                 return
             for key, expected_value in expected.items():
                 self._compare(
@@ -324,10 +337,37 @@ class JsonExpectedMatchStep(_JsonStepBase):
                     ignored,
                     mismatched,
                 )
+            for key, actual_value in actual.items():
+                if key not in expected:
+                    self._compare(
+                        _MISSING,
+                        actual_value,
+                        f"{path}.{key}",
+                        matched,
+                        ignored,
+                        mismatched,
+                    )
             return
 
-        # Scalars and arrays are leaves compared by equality.
+        if isinstance(expected, list):
+            if not isinstance(actual, list):
+                mismatched.append(
+                    f"{path}: expected an array, got {type(actual).__name__}"
+                )
+                return
+            for index in range(max(len(expected), len(actual))):
+                self._compare(
+                    expected[index] if index < len(expected) else _MISSING,
+                    actual[index] if index < len(actual) else _MISSING,
+                    f"{path}[{index}]",
+                    matched,
+                    ignored,
+                    mismatched,
+                )
+            return
+
+        # Scalars are leaves compared by equality.
         if expected == actual:
             matched.append(path)
         else:
-            mismatched.append(path)
+            mismatched.append(f"{path}: value does not match the expected value")
