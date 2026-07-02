@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if test_case else 'New' }} Test Case — Prompt Optimizer{% endblock %}
+{% block content %}
+<h1>{{ 'Edit test case' if test_case else 'New test case' }}</h1>
+
+<form method="post" action="{{ '/test-cases/' + test_case.id if test_case else '/test-cases' }}" class="stacked">
+  <label>Name
+    <input type="text" name="name" required value="{{ test_case.name if test_case else '' }}">
+  </label>
+  <label>Data (JSON object — inputs handed to the executor)
+    <textarea name="data" rows="8">{{ test_case.data|tojson_pretty if test_case else '{}' }}</textarea>
+  </label>
+  <label>Evaluation criteria (JSON object — consumed by your evaluation steps)
+    <textarea name="evaluation_criteria" rows="8">{{ test_case.evaluation_criteria|tojson_pretty if test_case else '{}' }}</textarea>
+  </label>
+  <div class="actions">
+    <button class="btn primary" type="submit">Save</button>
+    <a class="btn" href="/test-cases">Cancel</a>
+  </div>
+</form>
+{% endblock %}

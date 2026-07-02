@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Run {{ run_id[:8] }} — Prompt Optimizer{% endblock %}
+{% block content %}
+<div class="section-head">
+  <h1>{{ 'Optimization' if kind == 'optimization' else 'Evaluation' }} run <code>{{ run_id[:8] }}</code></h1>
+  <div class="actions">
+    {% if kind == 'optimization' %}
+    <a class="btn" href="/optimizations/{{ run_id }}/steps">View steps</a>
+    <a class="btn" href="/states/{{ run.state_id }}">Back to state</a>
+    {% else %}
+    <a class="btn" href="/evaluations/{{ run_id }}/reports">View reports</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="cards">
+  <div class="card">
+    <h3>Status</h3>
+    <p><span id="run-status" class="status status-{{ run.status }}">{{ run.status }}</span></p>
+  </div>
+  <div class="card">
+    <h3>Progress</h3>
+    <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
+    <p><span id="progress-count" class="muted">—</span></p>
+  </div>
+  <div class="card">
+    <h3>Current step</h3>
+    <p id="current-step" class="muted">—</p>
+  </div>
+</div>
+
+<section>
+  <h2>Live report</h2>
+  <table>
+    <thead><tr><th>Time</th><th>Event</th><th>Progress</th><th>Score</th><th>Detail</th></tr></thead>
+    <tbody id="event-log">
+      <tr id="event-log-empty"><td colspan="5" class="muted">Waiting for events…</td></tr>
+    </tbody>
+  </table>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+  window.RUN_ID = {{ run_id|tojson }};
+  window.RUN_KIND = {{ kind|tojson }};
+</script>
+<script src="/static/progress.js"></script>
+{% endblock %}

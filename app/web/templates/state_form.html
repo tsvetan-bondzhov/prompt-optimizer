@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if state else 'New' }} State — Prompt Optimizer{% endblock %}
+{% block content %}
+<h1>{{ 'Edit optimization state' if state else 'New optimization state' }}</h1>
+
+<form method="post" action="{{ '/states/' + state.id if state else '/states' }}" class="stacked">
+  <label>Goal
+    <input type="text" name="goal" required value="{{ state.goal if state else '' }}"
+           placeholder="What should the prompt achieve?">
+  </label>
+  <label>Current prompt
+    <textarea name="current_prompt" rows="10" required>{{ state.current_prompt if state else '' }}</textarea>
+  </label>
+  {% if state %}<p class="muted">Editing the prompt resets the measured score — the next optimization run re-establishes a baseline.</p>{% endif %}
+  <fieldset>
+    <legend>Test cases</legend>
+    {% if test_cases %}
+      {% set linked = state.test_case_ids if state else [] %}
+      {% for tc in test_cases %}
+      <label class="check">
+        <input type="checkbox" name="test_case_ids" value="{{ tc.id }}"
+               {% if tc.id in linked %}checked{% endif %}>
+        {{ tc.name }}
+      </label>
+      {% endfor %}
+    {% else %}
+      <p class="muted">No test cases exist yet — <a href="/test-cases/new">create some</a> first.</p>
+    {% endif %}
+  </fieldset>
+  <div class="actions">
+    <button class="btn primary" type="submit">Save</button>
+    <a class="btn" href="{{ '/states/' + state.id if state else '/' }}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

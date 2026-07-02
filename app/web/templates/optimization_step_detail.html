@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Step {{ step.iteration_index }} — Prompt Optimizer{% endblock %}
+{% block content %}
+<div class="section-head">
+  <h1>Iteration {{ step.iteration_index }}
+    {% if step.accepted %}<span class="status status-completed">accepted</span>
+    {% else %}<span class="status status-failed">rejected</span>{% endif %}
+  </h1>
+  <a class="btn" href="/optimizations/{{ step.run_id }}/steps">All steps</a>
+</div>
+
+<div class="cards">
+  <div class="card">
+    <h3>Score</h3>
+    <p class="big-score">
+      {{ '%.2f'|format(step.previous_avg_score) if step.previous_avg_score is not none else '—' }}
+      →
+      {{ '%.2f'|format(step.new_avg_score) if step.new_avg_score is not none else '—' }}
+    </p>
+  </div>
+  <div class="card">
+    <h3>Test cases</h3>
+    <ul class="compact">
+      {% for tcid in step.test_case_ids %}<li>{{ test_case_names.get(tcid, tcid[:8]) }}</li>{% endfor %}
+    </ul>
+  </div>
+</div>
+
+<div class="cards">
+  <div class="card">
+    <h2>Previous prompt</h2>
+    <pre class="prompt">{{ step.previous_prompt }}</pre>
+  </div>
+  <div class="card">
+    <h2>Proposed prompt</h2>
+    <pre class="prompt">{{ step.proposed_prompt }}</pre>
+  </div>
+</div>
+
+{% if prompt_diff %}
+<section>
+  <h2>Diff</h2>
+  <pre class="prompt diff">{{ prompt_diff }}</pre>
+</section>
+{% endif %}
+
+<div class="cards">
+  <div class="card ok">
+    <h3>Strengths</h3>
+    <ul>{% for s in step.summary.strengths %}<li>{{ s }}</li>{% else %}<li class="muted">—</li>{% endfor %}</ul>
+  </div>
+  <div class="card warn">
+    <h3>Weaknesses</h3>
+    <ul>{% for w in step.summary.weaknesses %}<li>{{ w }}</li>{% else %}<li class="muted">—</li>{% endfor %}</ul>
+  </div>
+</div>
+
+<section>
+  <h2>Summarized reasoning</h2>
+  <pre class="prompt">{{ step.summarized_reasoning }}</pre>
+</section>
+
+<section>
+  <h2>Evaluation reports</h2>
+  {% if step.evaluation_report_ids %}
+  <ul class="compact">
+    {% for rid in step.evaluation_report_ids %}
+    <li><a href="/reports/{{ rid }}"><code>{{ rid[:8] }}</code></a></li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="muted">No linked reports.</p>{% endif %}
+</section>
+{% endblock %}

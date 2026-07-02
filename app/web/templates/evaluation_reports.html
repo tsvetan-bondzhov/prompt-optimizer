@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Evaluation Reports — Prompt Optimizer{% endblock %}
+{% block content %}
+<div class="section-head">
+  <h1>Evaluation reports <code>{{ run_id[:8] }}</code></h1>
+  <a class="btn" href="/runs/{{ run_id }}">Run progress</a>
+</div>
+
+{% if run %}
+<div class="cards">
+  <div class="card">
+    <h3>Run</h3>
+    <p><span class="status status-{{ run.status }}">{{ run.status }}</span>
+       {% if run.avg_score is not none %} · avg <span class="score">{{ '%.2f'|format(run.avg_score) }}</span>{% endif %}
+       · {{ run.executions_per_test_case }}× per test case</p>
+  </div>
+  <div class="card">
+    <h3>Prompt</h3>
+    <pre class="prompt small">{{ run.prompt }}</pre>
+  </div>
+</div>
+{% endif %}
+
+{% if reports %}
+<table>
+  <thead>
+    <tr><th>Date</th><th>Test case</th><th>Score</th><th>Strengths</th><th>Weaknesses</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for r in reports %}
+    <tr>
+      <td class="muted">{{ r.date }}</td>
+      <td>{{ test_case_names.get(r.test_case_id, r.test_case_id[:8]) }}</td>
+      <td><span class="score">{{ '%.2f'|format(r.score) }}</span></td>
+      <td><ul class="compact">{% for s in r.strengths[:3] %}<li>{{ s }}</li>{% endfor %}</ul></td>
+      <td><ul class="compact">{% for w in r.weaknesses[:3] %}<li>{{ w }}</li>{% endfor %}</ul></td>
+      <td><a class="btn small" href="/reports/{{ r.id }}">Detail</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">No reports yet — the run may still be in progress.</p>
+{% endif %}
+{% endblock %}

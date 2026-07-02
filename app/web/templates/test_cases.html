@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Test Cases — Prompt Optimizer{% endblock %}
+{% block content %}
+<div class="section-head">
+  <h1>Test Cases</h1>
+  <a class="btn" href="/test-cases/new">＋ New test case</a>
+</div>
+
+{% if test_cases %}
+<table>
+  <thead><tr><th>Name</th><th>Data</th><th>Criteria</th><th>Created</th><th></th></tr></thead>
+  <tbody>
+    {% for tc in test_cases %}
+    <tr>
+      <td>{{ tc.name }}</td>
+      <td><code class="truncate">{{ tc.data|tojson_pretty|truncate(60) }}</code></td>
+      <td><code class="truncate">{{ tc.evaluation_criteria|tojson_pretty|truncate(60) }}</code></td>
+      <td class="muted">{{ tc.created_at }}</td>
+      <td class="actions">
+        <a class="btn small" href="/test-cases/{{ tc.id }}/edit">Edit</a>
+        <form method="post" action="/test-cases/{{ tc.id }}/delete" class="inline"
+              onsubmit="return confirm('Delete test case {{ tc.name }}?');">
+          <button class="btn small danger" type="submit">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">No test cases yet.</p>
+{% endif %}
+
+<section>
+  <h2>Bulk import</h2>
+  <p class="muted">Paste a JSON array of <code>{"name", "data", "evaluation_criteria"}</code> objects.</p>
+  <form method="post" action="/test-cases/import">
+    <textarea name="payload" rows="6" placeholder='[{"name": "example", "data": {"input": "..."}, "evaluation_criteria": {"keywords": ["..."]}}]'></textarea>
+    <button class="btn" type="submit">Import</button>
+  </form>
+</section>
+{% endblock %}

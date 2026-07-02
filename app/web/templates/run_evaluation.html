@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Run Evaluation — Prompt Optimizer{% endblock %}
+{% block content %}
+<h1>Run a standalone evaluation</h1>
+<p class="muted">Evaluates a prompt over the selected test cases. Leave the prompt empty and pick a state to evaluate its current prompt.</p>
+
+<form method="post" action="/evaluate" class="stacked">
+  <label>State (optional — provides prompt and/or test cases)
+    <select name="state_id">
+      <option value="">— none —</option>
+      {% for s in states %}
+      <option value="{{ s.id }}" {% if s.id == selected_state_id %}selected{% endif %}>{{ s.goal }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Prompt (leave empty to use the state's current prompt)
+    <textarea name="prompt" rows="8"></textarea>
+  </label>
+  <fieldset>
+    <legend>Test cases (leave all unchecked to use the state's test cases)</legend>
+    {% for tc in test_cases %}
+    <label class="check">
+      <input type="checkbox" name="test_case_ids" value="{{ tc.id }}"> {{ tc.name }}
+    </label>
+    {% else %}
+    <p class="muted">No test cases exist — <a href="/test-cases/new">create some</a> first.</p>
+    {% endfor %}
+  </fieldset>
+  <label>Executions per test case
+    <input type="number" name="executions_per_test_case" min="1" value="1">
+  </label>
+  <div class="actions">
+    <button class="btn primary" type="submit">Start evaluation</button>
+  </div>
+</form>
+{% endblock %}

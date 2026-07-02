@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Optimization Steps — Prompt Optimizer{% endblock %}
+{% block content %}
+<div class="section-head">
+  <h1>Optimization steps <code>{{ run_id[:8] }}</code></h1>
+  <div class="actions">
+    <a class="btn" href="/runs/{{ run_id }}">Run progress</a>
+    <a class="btn" href="/states/{{ run.state_id }}">State</a>
+  </div>
+</div>
+
+<p><span class="status status-{{ run.status }}">{{ run.status }}</span>
+   · target {{ run.config.target_score }} · max {{ run.config.max_iterations }} iterations
+   · {{ run.config.executions_per_test_case }}× per test case</p>
+
+{% if steps %}
+<table>
+  <thead>
+    <tr><th>#</th><th>Result</th><th>Prev → New score</th><th>Test cases</th><th>Summary</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for s in steps %}
+    <tr class="{{ 'row-accepted' if s.accepted else 'row-rejected' }}">
+      <td>{{ s.iteration_index }}</td>
+      <td>
+        {% if s.accepted %}<span class="status status-completed">accepted</span>
+        {% else %}<span class="status status-failed">rejected</span>{% endif %}
+      </td>
+      <td>
+        {{ '%.2f'|format(s.previous_avg_score) if s.previous_avg_score is not none else '—' }}
+        →
+        <span class="score">{{ '%.2f'|format(s.new_avg_score) if s.new_avg_score is not none else '—' }}</span>
+      </td>
+      <td>{{ (s.test_case_ids or [])|length }}</td>
+      <td class="truncate muted">{{ (s.summarized_reasoning or '')[:120] }}</td>
+      <td><a class="btn small" href="/steps/{{ s.id }}">Detail</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">No steps yet — the run may still be in progress.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Report — Prompt Optimizer{% endblock %}
+{% block content %}
+<div class="section-head">
+  <h1>Evaluation report <code>{{ report.id[:8] }}</code></h1>
+  {% if report.run_id %}<a class="btn" href="/evaluations/{{ report.run_id }}/reports">All reports for run</a>{% endif %}
+</div>
+
+<div class="cards">
+  <div class="card">
+    <h3>Score</h3>
+    <p class="big-score">{{ '%.2f'|format(report.score) }} <span class="muted">/ 10</span></p>
+    <p class="muted">{{ report.date }}</p>
+  </div>
+  <div class="card">
+    <h3>Test case</h3>
+    <p>{{ test_case.name if test_case else report.test_case_id }}</p>
+    {% if test_case %}<pre class="prompt small">{{ test_case.data|tojson_pretty }}</pre>{% endif %}
+  </div>
+</div>
+
+<section>
+  <h2>Prompt</h2>
+  <pre class="prompt">{{ report.prompt }}</pre>
+</section>
+
+<section>
+  <h2>Prompt result</h2>
+  <pre class="prompt">{{ report.prompt_result }}</pre>
+</section>
+
+<div class="cards">
+  <div class="card ok">
+    <h3>Strengths</h3>
+    <ul>{% for s in report.strengths %}<li>{{ s }}</li>{% else %}<li class="muted">—</li>{% endfor %}</ul>
+  </div>
+  <div class="card warn">
+    <h3>Weaknesses</h3>
+    <ul>{% for w in report.weaknesses %}<li>{{ w }}</li>{% else %}<li class="muted">—</li>{% endfor %}</ul>
+  </div>
+</div>
+
+<section>
+  <h2>Reasoning</h2>
+  <pre class="prompt">{{ report.reasoning }}</pre>
+</section>
+
+{% if report.step_evaluations %}
+<section>
+  <h2>Per-step evaluations</h2>
+  <table>
+    <thead><tr><th>Step</th><th>Score</th><th>Strengths</th><th>Weaknesses</th><th>Reasoning</th></tr></thead>
+    <tbody>
+      {% for e in report.step_evaluations %}
+      <tr>
+        <td>{{ e.step_name or 'step' }}</td>
+        <td><span class="score">{{ e.score }}</span></td>
+        <td><ul class="compact">{% for s in e.strengths %}<li>{{ s }}</li>{% endfor %}</ul></td>
+        <td><ul class="compact">{% for w in e.weaknesses %}<li>{{ w }}</li>{% endfor %}</ul></td>
+        <td class="muted">{{ e.reasoning }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+{% endblock %}

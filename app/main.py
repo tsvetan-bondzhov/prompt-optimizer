@@ -143,5 +143,9 @@ def _include_routers(app: FastAPI) -> None:
     app.include_router(routes_reports.router)
     app.include_router(routes_progress.router)
 
+    from app.web import routes as web_routes
+
+    app.include_router(web_routes.router)
+
 
 app = create_app()

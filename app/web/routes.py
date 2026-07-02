@@ -1,0 +1,573 @@
+"""Server-rendered web UI routes (Task 14).
+
+Jinja2 pages for managing test cases and states, launching evaluation /
+optimization runs, watching live progress (SSE), and browsing reports. The
+routes reuse the same repositories/services and background executors as the
+JSON API — no business logic lives here.
+"""
+
+from __future__ import annotations
+
+import difflib
+import json
+from pathlib import Path
+from typing import Any, Optional
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
+
+from app.api.background import execute_evaluation_run, execute_optimization_run
+from app.api.deps import (
+    get_evaluation_run_repository,
+    get_optimization_run_repository,
+    get_report_repository,
+    get_state_repository,
+    get_step_repository,
+    get_test_case_repository,
+)
+from app.api.routes_evaluation import resolve_test_cases
+from app.db.repositories import (
+    EvaluationReportRepository,
+    EvaluationRunRepository,
+    OptimizationRunRepository,
+    OptimizationStateRepository,
+    OptimizationStepRepository,
+    TestCaseRepository,
+)
+from app.models import (
+    EvaluationRun,
+    OptimizationRun,
+    OptimizationState,
+    RunConfig,
+    RunStatus,
+    TestCase,
+)
+
+router = APIRouter(include_in_schema=False)
+
+TEMPLATES_DIR = Path(__file__).parent / "templates"
+templates = Jinja2Templates(directory=TEMPLATES_DIR)
+templates.env.filters["tojson_pretty"] = lambda value: json.dumps(
+    value, indent=2, default=str
+)
+
+
+def _render(request: Request, name: str, **context: Any) -> HTMLResponse:
+    return templates.TemplateResponse(request, name, context)
+
+
+def _parse_json_field(raw: str, field: str) -> dict[str, Any]:
+    """Parse a JSON object form field, raising a readable 400 on bad input."""
+
+    raw = (raw or "").strip() or "{}"
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Field {field!r} is not valid JSON: {exc}.",
+        ) from None
+    if not isinstance(value, dict):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Field {field!r} must be a JSON object.",
+        )
+    return value
+
+
+# --------------------------------------------------------------------------
+# Dashboard
+# --------------------------------------------------------------------------
+
+
+@router.get("/", response_class=HTMLResponse)
+async def dashboard(
+    request: Request,
+    states: OptimizationStateRepository = Depends(get_state_repository),
+    opt_runs: OptimizationRunRepository = Depends(get_optimization_run_repository),
+    eval_runs: EvaluationRunRepository = Depends(get_evaluation_run_repository),
+) -> HTMLResponse:
+    state_docs = await states.list(limit=50)
+    state_names = {s["id"]: s["goal"] for s in state_docs}
+    return _render(
+        request,
+        "dashboard.html",
+        states=state_docs,
+        state_names=state_names,
+        optimization_runs=await opt_runs.list(limit=10),
+        evaluation_runs=await eval_runs.list(limit=10),
+    )
+
+
+# --------------------------------------------------------------------------
+# Test cases
+# --------------------------------------------------------------------------
+
+
+@router.get("/test-cases", response_class=HTMLResponse)
+async def test_cases_page(
+    request: Request,
+    repo: TestCaseRepository = Depends(get_test_case_repository),
+) -> HTMLResponse:
+    return _render(request, "test_cases.html", test_cases=await repo.list(limit=500))
+
+
+@router.get("/test-cases/new", response_class=HTMLResponse)
+async def test_case_new(request: Request) -> HTMLResponse:
+    return _render(request, "test_case_form.html", test_case=None)
+
+
+@router.post("/test-cases")
+async def test_case_create(
+    request: Request,
+    repo: TestCaseRepository = Depends(get_test_case_repository),
+) -> RedirectResponse:
+    form = await request.form()
+    test_case = TestCase(
+        name=str(form.get("name", "")).strip(),
+        data=_parse_json_field(str(form.get("data", "")), "data"),
+        evaluation_criteria=_parse_json_field(
+            str(form.get("evaluation_criteria", "")), "evaluation_criteria"
+        ),
+    )
+    await repo.create(test_case.model_dump())
+    return RedirectResponse("/test-cases", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/test-cases/import")
+async def test_case_import(
+    request: Request,
+    repo: TestCaseRepository = Depends(get_test_case_repository),
+) -> RedirectResponse:
+    form = await request.form()
+    raw = str(form.get("payload", "")).strip()
+    try:
+        items = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=400, detail=f"Import payload is not valid JSON: {exc}."
+        ) from None
+    if not isinstance(items, list) or not items:
+        raise HTTPException(
+            status_code=400,
+            detail="Import payload must be a non-empty JSON array of test cases.",
+        )
+    for item in items:
+        test_case = TestCase(
+            name=str(item.get("name", "")).strip(),
+            data=item.get("data") or {},
+            evaluation_criteria=item.get("evaluation_criteria") or {},
+        )
+        await repo.create(test_case.model_dump())
+    return RedirectResponse("/test-cases", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.get("/test-cases/{test_case_id}/edit", response_class=HTMLResponse)
+async def test_case_edit(
+    request: Request,
+    test_case_id: str,
+    repo: TestCaseRepository = Depends(get_test_case_repository),
+) -> HTMLResponse:
+    doc = await repo.get(test_case_id)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Test case not found.")
+    return _render(request, "test_case_form.html", test_case=doc)
+
+
+@router.post("/test-cases/{test_case_id}")
+async def test_case_update(
+    request: Request,
+    test_case_id: str,
+    repo: TestCaseRepository = Depends(get_test_case_repository),
+) -> RedirectResponse:
+    form = await request.form()
+    await repo.update(
+        test_case_id,
+        {
+            "name": str(form.get("name", "")).strip(),
+            "data": _parse_json_field(str(form.get("data", "")), "data"),
+            "evaluation_criteria": _parse_json_field(
+                str(form.get("evaluation_criteria", "")), "evaluation_criteria"
+            ),
+        },
+    )
+    return RedirectResponse("/test-cases", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/test-cases/{test_case_id}/delete")
+async def test_case_delete(
+    test_case_id: str,
+    repo: TestCaseRepository = Depends(get_test_case_repository),
+) -> RedirectResponse:
+    await repo.delete(test_case_id)
+    return RedirectResponse("/test-cases", status_code=status.HTTP_303_SEE_OTHER)
+
+
+# --------------------------------------------------------------------------
+# States
+# --------------------------------------------------------------------------
+
+
+@router.get("/states/new", response_class=HTMLResponse)
+async def state_new(
+    request: Request,
+    test_cases: TestCaseRepository = Depends(get_test_case_repository),
+) -> HTMLResponse:
+    return _render(
+        request,
+        "state_form.html",
+        state=None,
+        test_cases=await test_cases.list(limit=500),
+    )
+
+
+@router.post("/states")
+async def state_create(
+    request: Request,
+    repo: OptimizationStateRepository = Depends(get_state_repository),
+) -> RedirectResponse:
+    form = await request.form()
+    state = OptimizationState(
+        goal=str(form.get("goal", "")).strip(),
+        current_prompt=str(form.get("current_prompt", "")),
+        test_case_ids=[str(v) for v in form.getlist("test_case_ids")],
+    )
+    await repo.create(state.model_dump())
+    return RedirectResponse(
+        f"/states/{state.id}", status_code=status.HTTP_303_SEE_OTHER
+    )
+
+
+@router.get("/states/{state_id}", response_class=HTMLResponse)
+async def state_page(
+    request: Request,
+    state_id: str,
+    repo: OptimizationStateRepository = Depends(get_state_repository),
+    test_cases: TestCaseRepository = Depends(get_test_case_repository),
+    opt_runs: OptimizationRunRepository = Depends(get_optimization_run_repository),
+) -> HTMLResponse:
+    state = await repo.get(state_id)
+    if state is None:
+        raise HTTPException(status_code=404, detail="State not found.")
+    linked = await test_cases.list_by_ids(state.get("test_case_ids") or [])
+    return _render(
+        request,
+        "state.html",
+        state=state,
+        linked_test_cases=linked,
+        runs=await opt_runs.list_by_state(state_id, limit=20),
+    )
+
+
+@router.get("/states/{state_id}/edit", response_class=HTMLResponse)
+async def state_edit(
+    request: Request,
+    state_id: str,
+    repo: OptimizationStateRepository = Depends(get_state_repository),
+    test_cases: TestCaseRepository = Depends(get_test_case_repository),
+) -> HTMLResponse:
+    state = await repo.get(state_id)
+    if state is None:
+        raise HTTPException(status_code=404, detail="State not found.")
+    return _render(
+        request,
+        "state_form.html",
+        state=state,
+        test_cases=await test_cases.list(limit=500),
+    )
+
+
+@router.post("/states/{state_id}")
+async def state_update(
+    request: Request,
+    state_id: str,
+    repo: OptimizationStateRepository = Depends(get_state_repository),
+) -> RedirectResponse:
+    existing = await repo.get(state_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="State not found.")
+    form = await request.form()
+    changes: dict[str, Any] = {
+        "goal": str(form.get("goal", "")).strip(),
+        "current_prompt": str(form.get("current_prompt", "")),
+        "test_case_ids": [str(v) for v in form.getlist("test_case_ids")],
+    }
+    # A manually edited prompt invalidates the measured score/summary.
+    if changes["current_prompt"] != existing.get("current_prompt"):
+        changes.update(
+            {"avg_score": None, "strengths": [], "weaknesses": [], "reasoning": ""}
+        )
+    await repo.update(state_id, changes)
+    return RedirectResponse(
+        f"/states/{state_id}", status_code=status.HTTP_303_SEE_OTHER
+    )
+
+
+@router.post("/states/{state_id}/delete")
+async def state_delete(
+    state_id: str,
+    repo: OptimizationStateRepository = Depends(get_state_repository),
+) -> RedirectResponse:
+    await repo.delete(state_id)
+    return RedirectResponse("/", status_code=status.HTTP_303_SEE_OTHER)
+
+
+# --------------------------------------------------------------------------
+# Run evaluation / optimization
+# --------------------------------------------------------------------------
+
+
+@router.get("/evaluate", response_class=HTMLResponse)
+async def run_evaluation_form(
+    request: Request,
+    state_id: Optional[str] = None,
+    test_cases: TestCaseRepository = Depends(get_test_case_repository),
+    states: OptimizationStateRepository = Depends(get_state_repository),
+) -> HTMLResponse:
+    return _render(
+        request,
+        "run_evaluation.html",
+        test_cases=await test_cases.list(limit=500),
+        states=await states.list(limit=100),
+        selected_state_id=state_id,
+    )
+
+
+@router.post("/evaluate")
+async def run_evaluation_submit(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    runs: EvaluationRunRepository = Depends(get_evaluation_run_repository),
+    test_case_repo: TestCaseRepository = Depends(get_test_case_repository),
+    states: OptimizationStateRepository = Depends(get_state_repository),
+) -> RedirectResponse:
+    form = await request.form()
+    prompt_text = str(form.get("prompt", "")).strip()
+    state_id = str(form.get("state_id", "")).strip()
+    test_case_ids = [str(v) for v in form.getlist("test_case_ids")]
+    n = max(1, int(form.get("executions_per_test_case", 1) or 1))
+
+    if state_id:
+        state = await states.get(state_id)
+        if state is None:
+            raise HTTPException(status_code=400, detail="State not found.")
+        if not prompt_text:
+            prompt_text = state.get("current_prompt") or ""
+        if not test_case_ids:
+            test_case_ids = list(state.get("test_case_ids") or [])
+
+    if not prompt_text:
+        raise HTTPException(
+            status_code=400, detail="Provide a prompt or select a state."
+        )
+    selected = await resolve_test_cases(test_case_ids, test_case_repo)
+
+    run = EvaluationRun(
+        prompt=prompt_text,
+        test_case_ids=[tc.id for tc in selected],
+        executions_per_test_case=n,
+        status=RunStatus.PENDING.value,
+    )
+    await runs.create(run.model_dump())
+    background_tasks.add_task(
+        execute_evaluation_run,
+        request.app.state.db,
+        request.app.state.progress_tracker,
+        run.id,
+        prompt_text,
+        selected,
+        n,
+    )
+    return RedirectResponse(
+        f"/runs/{run.id}", status_code=status.HTTP_303_SEE_OTHER
+    )
+
+
+@router.get("/optimize", response_class=HTMLResponse)
+async def run_optimization_form(
+    request: Request,
+    state_id: Optional[str] = None,
+    states: OptimizationStateRepository = Depends(get_state_repository),
+) -> HTMLResponse:
+    return _render(
+        request,
+        "run_optimization.html",
+        states=await states.list(limit=100),
+        selected_state_id=state_id,
+        defaults=RunConfig(),
+    )
+
+
+@router.post("/optimize")
+async def run_optimization_submit(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    runs: OptimizationRunRepository = Depends(get_optimization_run_repository),
+    states: OptimizationStateRepository = Depends(get_state_repository),
+) -> RedirectResponse:
+    form = await request.form()
+    state_id = str(form.get("state_id", "")).strip()
+    state = await states.get(state_id)
+    if state is None:
+        raise HTTPException(status_code=400, detail="State not found.")
+    if not state.get("test_case_ids"):
+        raise HTTPException(
+            status_code=400,
+            detail="The selected state has no linked test cases.",
+        )
+    config = RunConfig(
+        target_score=float(form.get("target_score") or RunConfig().target_score),
+        max_iterations=int(form.get("max_iterations") or RunConfig().max_iterations),
+        executions_per_test_case=int(
+            form.get("executions_per_test_case")
+            or RunConfig().executions_per_test_case
+        ),
+    )
+
+    run = OptimizationRun(
+        state_id=state_id, config=config, status=RunStatus.PENDING
+    )
+    await runs.create(run.model_dump())
+    background_tasks.add_task(
+        execute_optimization_run,
+        request.app.state.db,
+        request.app.state.progress_tracker,
+        run.id,
+        state_id,
+        config,
+    )
+    return RedirectResponse(
+        f"/runs/{run.id}", status_code=status.HTTP_303_SEE_OTHER
+    )
+
+
+# --------------------------------------------------------------------------
+# Progress page
+# --------------------------------------------------------------------------
+
+
+@router.get("/runs/{run_id}", response_class=HTMLResponse)
+async def run_progress_page(
+    request: Request,
+    run_id: str,
+    opt_runs: OptimizationRunRepository = Depends(get_optimization_run_repository),
+    eval_runs: EvaluationRunRepository = Depends(get_evaluation_run_repository),
+) -> HTMLResponse:
+    run = await opt_runs.get(run_id)
+    kind = "optimization"
+    if run is None:
+        run = await eval_runs.get(run_id)
+        kind = "evaluation"
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found.")
+    return _render(request, "progress.html", run=run, run_id=run_id, kind=kind)
+
+
+# --------------------------------------------------------------------------
+# Reports
+# --------------------------------------------------------------------------
+
+
+async def _test_case_names(
+    ids: list[str], repo: TestCaseRepository
+) -> dict[str, str]:
+    docs = await repo.list_by_ids(ids)
+    return {d["id"]: d["name"] for d in docs}
+
+
+@router.get("/evaluations/{run_id}/reports", response_class=HTMLResponse)
+async def evaluation_reports_page(
+    request: Request,
+    run_id: str,
+    eval_runs: EvaluationRunRepository = Depends(get_evaluation_run_repository),
+    reports: EvaluationReportRepository = Depends(get_report_repository),
+    test_cases: TestCaseRepository = Depends(get_test_case_repository),
+) -> HTMLResponse:
+    run = await eval_runs.get(run_id)
+    report_docs = await reports.list_by_run(run_id)
+    if run is None and not report_docs:
+        raise HTTPException(status_code=404, detail="Evaluation run not found.")
+    names = await _test_case_names(
+        list({r["test_case_id"] for r in report_docs}), test_cases
+    )
+    return _render(
+        request,
+        "evaluation_reports.html",
+        run=run,
+        run_id=run_id,
+        reports=report_docs,
+        test_case_names=names,
+    )
+
+
+@router.get("/reports/{report_id}", response_class=HTMLResponse)
+async def evaluation_report_detail_page(
+    request: Request,
+    report_id: str,
+    reports: EvaluationReportRepository = Depends(get_report_repository),
+    test_cases: TestCaseRepository = Depends(get_test_case_repository),
+) -> HTMLResponse:
+    report = await reports.get(report_id)
+    if report is None:
+        raise HTTPException(status_code=404, detail="Report not found.")
+    test_case = await test_cases.get(report["test_case_id"])
+    return _render(
+        request,
+        "evaluation_report_detail.html",
+        report=report,
+        test_case=test_case,
+    )
+
+
+@router.get("/optimizations/{run_id}/steps", response_class=HTMLResponse)
+async def optimization_steps_page(
+    request: Request,
+    run_id: str,
+    opt_runs: OptimizationRunRepository = Depends(get_optimization_run_repository),
+    steps: OptimizationStepRepository = Depends(get_step_repository),
+    test_cases: TestCaseRepository = Depends(get_test_case_repository),
+) -> HTMLResponse:
+    run = await opt_runs.get(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Optimization run not found.")
+    step_docs = await steps.list_by_run(run_id)
+    all_tc_ids = {tcid for s in step_docs for tcid in s.get("test_case_ids", [])}
+    names = await _test_case_names(list(all_tc_ids), test_cases)
+    return _render(
+        request,
+        "optimization_steps.html",
+        run=run,
+        run_id=run_id,
+        steps=step_docs,
+        test_case_names=names,
+    )
+
+
+@router.get("/steps/{step_id}", response_class=HTMLResponse)
+async def optimization_step_detail_page(
+    request: Request,
+    step_id: str,
+    steps: OptimizationStepRepository = Depends(get_step_repository),
+    test_cases: TestCaseRepository = Depends(get_test_case_repository),
+) -> HTMLResponse:
+    step = await steps.get(step_id)
+    if step is None:
+        raise HTTPException(status_code=404, detail="Step not found.")
+    names = await _test_case_names(step.get("test_case_ids", []), test_cases)
+    diff = "\n".join(
+        difflib.unified_diff(
+            (step.get("previous_prompt") or "").splitlines(),
+            (step.get("proposed_prompt") or "").splitlines(),
+            fromfile="previous prompt",
+            tofile="proposed prompt",
+            lineterm="",
+        )
+    )
+    return _render(
+        request,
+        "optimization_step_detail.html",
+        step=step,
+        test_case_names=names,
+        prompt_diff=diff,
+    )
