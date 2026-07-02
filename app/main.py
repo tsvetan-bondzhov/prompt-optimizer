@@ -127,5 +127,21 @@ def _include_routers(app: FastAPI) -> None:
     composition point.
     """
 
+    from app.api import (
+        routes_evaluation,
+        routes_optimization,
+        routes_progress,
+        routes_reports,
+        routes_state,
+        routes_testcases,
+    )
+
+    app.include_router(routes_testcases.router)
+    app.include_router(routes_state.router)
+    app.include_router(routes_evaluation.router)
+    app.include_router(routes_optimization.router)
+    app.include_router(routes_reports.router)
+    app.include_router(routes_progress.router)
+
 
 app = create_app()
