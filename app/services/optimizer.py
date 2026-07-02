@@ -106,7 +106,7 @@ class OptimizerService:
         self._progress = progress
 
     async def optimize(
-        self, state_id: str, config: RunConfig
+        self, state_id: str, config: RunConfig, run_id: Optional[str] = None
     ) -> OptimizationState:
         """Run the optimization loop for ``state_id`` and return the final state.
 
@@ -118,6 +118,10 @@ class OptimizerService:
 
         :param state_id: Id of the :class:`OptimizationState` to optimize.
         :param config: Tunable run parameters (target/iterations/executions).
+        :param run_id: Optional id of a pre-created (``pending``)
+            :class:`OptimizationRun` — used by API routes that create the run
+            document up-front to return the id immediately, then execute the
+            loop in the background. When ``None`` a fresh run is created.
         :returns: The final (possibly updated) :class:`OptimizationState`.
         :raises ValueError: If the state is not found or has no test cases.
         :raises Exception: Re-raises improver/evaluator failures after marking the
@@ -127,8 +131,11 @@ class OptimizerService:
         state = await self._load_state(state_id)
         test_cases = await self._load_test_cases(state)
 
-        run = await self._create_run(state_id, config)
-        run_id = run.id
+        if run_id is None:
+            run = await self._create_run(state_id, config)
+            run_id = run.id
+        else:
+            await self._start_pending_run(run_id, config)
         hook = self._progress.make_hook(run_id) if self._progress else None
 
         try:
@@ -230,6 +237,21 @@ class OptimizerService:
         )
         await self._runs.create(run.model_dump())
         return run
+
+    async def _start_pending_run(self, run_id: str, config: RunConfig) -> None:
+        """Move a pre-created (``pending``) run into ``running`` state."""
+
+        await self._runs.update(
+            run_id,
+            {
+                "config": config.model_dump(),
+                "progress": RunProgress(
+                    total=config.max_iterations,
+                    status=RunStatus.RUNNING,
+                ).model_dump(mode="json"),
+            },
+        )
+        await self._runs.update_status(run_id, RunStatus.RUNNING.value)
 
     # -- loop building blocks -------------------------------------------------
 

@@ -41,7 +41,11 @@ def connect() -> AsyncIOMotorClient:
     global _client, _database
     if _client is None:
         settings = get_settings()
-        _client = AsyncIOMotorClient(settings.MONGO_URI)
+        # Bounded server selection so startup index creation fails fast (and is
+        # logged) instead of hanging when Mongo is unreachable.
+        _client = AsyncIOMotorClient(
+            settings.MONGO_URI, serverSelectionTimeoutMS=5000
+        )
         _database = _client[settings.MONGO_DB]
     return _client
 
