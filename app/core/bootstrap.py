@@ -60,6 +60,10 @@ def register_builtins() -> None:
     # effects out of the core package.
     import app.implementations.summarizer  # noqa: F401
 
-    # NOTE: reference improver is registered by its own module (Task 09).
+    # Reference improver (Task 09): importing the module fires its module-level
+    # registrations — the LLM-backed improver under ("improver", "claude_code")
+    # (the default ACTIVE_IMPROVER) and a generic ("improver", "default") alias.
+    # Imported lazily to keep import-time side effects out of the core package.
+    import app.implementations.improver  # noqa: F401
 
     _done = True
