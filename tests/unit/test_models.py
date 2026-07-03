@@ -64,7 +64,7 @@ def test_test_case_data_coerces_legacy_object():
     assert tc.data == [{"input": "x"}]
 
 
-def test_criteria_fallback_per_entry_then_dataset():
+def test_criteria_resolved_per_key_with_dataset_fallback():
     from app.models import TestCase
 
     tc = TestCase(
@@ -73,8 +73,32 @@ def test_criteria_fallback_per_entry_then_dataset():
         evaluation_criteria_per_entry=[{"keywords": ["one"]}, {}],
         evaluation_criteria={"keywords": ["fallback"]},
     )
+    # A key present per entry wins over the dataset value.
     assert tc.criteria_for_entry(0) == {"keywords": ["one"]}
     # Empty per-entry criteria falls back to the dataset criteria.
     assert tc.criteria_for_entry(1) == {"keywords": ["fallback"]}
     # Missing per-entry criteria (index out of range) falls back too.
     assert tc.criteria_for_entry(2) == {"keywords": ["fallback"]}
+
+
+def test_criteria_keys_can_mix_entry_and_dataset_levels():
+    from app.models import TestCase
+
+    tc = TestCase(
+        name="tc",
+        data=[{"a": 1}, {"a": 2}],
+        # expected_json varies per entry; json_schema is dataset-wide.
+        evaluation_criteria_per_entry=[
+            {"expected_json": {"answer": 1}},
+            {"expected_json": {"answer": 2}},
+        ],
+        evaluation_criteria={"json_schema": {"type": "object"}},
+    )
+    assert tc.criteria_for_entry(0) == {
+        "expected_json": {"answer": 1},
+        "json_schema": {"type": "object"},
+    }
+    assert tc.criteria_for_entry(1) == {
+        "expected_json": {"answer": 2},
+        "json_schema": {"type": "object"},
+    }

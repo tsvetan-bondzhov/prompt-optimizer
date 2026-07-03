@@ -72,8 +72,8 @@ class Grader(ABC):
     traceability in persisted reports.
 
     Graders are invoked once per data entry; :meth:`criteria_for` resolves the
-    criteria to grade against — the entry's own criteria when present, the
-    dataset-level criteria otherwise.
+    criteria to grade against **per key**: a key present in the entry's own
+    criteria wins, every other key falls back to the dataset-level criteria.
     """
 
     name: str
@@ -81,7 +81,13 @@ class Grader(ABC):
     def criteria_for(
         self, test_case: TestCase, entry_index: int
     ) -> dict[str, Any]:
-        """Criteria for ``entry_index``: per-entry first, dataset fallback."""
+        """Effective criteria for ``entry_index``, resolved key by key.
+
+        Each key comes from the entry's own criteria when present there and
+        from the dataset-level ``evaluation_criteria`` otherwise, so e.g.
+        ``expected_json`` can be set per entry while ``json_schema`` is set
+        once for the whole dataset.
+        """
 
         return test_case.criteria_for_entry(entry_index)
 

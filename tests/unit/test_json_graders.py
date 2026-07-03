@@ -321,3 +321,35 @@ async def test_expected_nested_null_ignored_inside_object():
         make_case({"expected_json": expected}),
     )
     assert evaluation.score == 10
+
+
+# -- key-aware criteria resolution --------------------------------------------
+
+
+async def test_schema_from_dataset_and_expected_from_entry():
+    """json_schema set for the dataset, expected_json set per entry."""
+
+    case = TestCase(
+        name="tc",
+        data=[{"q": 1}, {"q": 2}],
+        evaluation_criteria_per_entry=[
+            {"expected_json": {"name": "Ada", "age": 36}},
+            {"expected_json": {"name": "Bob", "age": 7}},
+        ],
+        evaluation_criteria={"json_schema": SCHEMA},
+    )
+
+    schema_grader = JsonSchemaValidationGrader()
+    match_grader = JsonExpectedMatchGrader()
+
+    # Entry 0: schema comes from the dataset criteria.
+    output = result_of({"name": "Ada", "age": 36})
+    assert (await schema_grader.grade(output, case, 0)).score == 10
+    assert (await match_grader.grade(output, case, 0)).score == 10
+
+    # Entry 1: same dataset schema, but that entry's own expected_json.
+    output = result_of({"name": "Bob", "age": 7})
+    assert (await schema_grader.grade(output, case, 1)).score == 10
+    assert (await match_grader.grade(output, case, 1)).score == 10
+    # Entry 0's expectation would not match entry 1's output.
+    assert (await match_grader.grade(output, case, 0)).score < 10

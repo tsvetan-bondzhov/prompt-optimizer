@@ -69,9 +69,11 @@ Built-in executors:
 Graders score a `PromptResult`. They are selected **per test case** via
 checkboxes (`TestCase.grader_names`). A grader is invoked once per data entry;
 use `self.criteria_for(test_case, entry_index)` to read the evaluation
-criteria — it returns the per-entry criteria
-(`evaluation_criteria_per_entry[entry_index]`) when present and falls back to
-the dataset-level `evaluation_criteria` otherwise. Each grader must return a
+criteria — it resolves them **per key**: a key present in
+`evaluation_criteria_per_entry[entry_index]` wins, and every other key falls
+back to the dataset-level `evaluation_criteria`. Different keys can live at
+different levels — e.g. `expected_json` typically varies per entry while
+`json_schema` is defined once for the whole dataset. Each grader must return a
 validated `PromptEvaluation`: 1–3 strengths, 1–3 weaknesses, non-empty
 reasoning, integer score 1–10.
 

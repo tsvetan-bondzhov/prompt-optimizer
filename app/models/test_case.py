@@ -50,13 +50,14 @@ class _TestCaseFields(BaseModel):
     evaluation_criteria_per_entry: list[dict[str, Any]] = Field(
         default_factory=list,
         description=(
-            "Per-data-entry criteria, aligned by index with 'data'. Graders "
-            "fall back to 'evaluation_criteria' when an entry has none."
+            "Per-data-entry criteria, aligned by index with 'data'. Resolved "
+            "per key: keys missing from an entry fall back to "
+            "'evaluation_criteria'."
         ),
     )
     evaluation_criteria: dict[str, Any] = Field(
         default_factory=dict,
-        description="Dataset-level criteria (fallback for all entries).",
+        description="Dataset-level criteria (per-key fallback for all entries).",
     )
     grader_names: list[str] = Field(
         default_factory=list,
@@ -95,9 +96,16 @@ class TestCase(_TestCaseFields):
     created_at: datetime = Field(default_factory=utcnow)
 
     def criteria_for_entry(self, entry_index: int) -> dict[str, Any]:
-        """Criteria for ``entry_index``: per-entry first, dataset fallback."""
+        """Effective criteria for ``entry_index``, resolved **per key**.
 
+        A key is taken from the entry's own criteria when present there and
+        falls back to the dataset-level ``evaluation_criteria`` otherwise, so
+        different keys can live at different levels (e.g. ``expected_json``
+        per entry while ``json_schema`` is defined once for the dataset).
+        """
+
+        merged: dict[str, Any] = dict(self.evaluation_criteria or {})
         per_entry = self.evaluation_criteria_per_entry
         if 0 <= entry_index < len(per_entry) and per_entry[entry_index]:
-            return per_entry[entry_index]
-        return self.evaluation_criteria or {}
+            merged.update(per_entry[entry_index])
+        return merged

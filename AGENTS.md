@@ -54,9 +54,10 @@ double quotes, ~88 col, Google-style docstrings with `:param:`).
   current prompt text, linked test cases, optimizer LLM runner, and the
   latest score/summary.
 - **Grader** (formerly "evaluation step") — scores one executed data entry;
-  selected per test case via `grader_names`. Criteria resolution:
-  per-entry `evaluation_criteria_per_entry[i]` falls back to the dataset
-  `evaluation_criteria` (see `Grader.criteria_for`).
+  selected per test case via `grader_names`. Criteria resolution is
+  **per key**: a key present in `evaluation_criteria_per_entry[i]` wins,
+  other keys fall back to the dataset `evaluation_criteria`
+  (see `Grader.criteria_for`).
 - **Data entry** — one element of `TestCase.data`; executed and graded
   individually, the test case score is the mean over entries.
 
