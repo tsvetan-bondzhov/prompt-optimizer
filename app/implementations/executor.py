@@ -24,21 +24,20 @@ from app.core.interfaces import PromptExecutor
 from app.core.registry import get_llm_runner, register
 from app.models import PromptText, PromptResult, TestCase
 
-__all__ = ["ReferencePromptExecutor", "render_test_case_input"]
+__all__ = ["ReferencePromptExecutor", "render_entry_input"]
 
 
-def render_test_case_input(test_case: TestCase) -> str:
-    """Render a test case's ``data`` mapping into a single user-prompt string.
+def render_entry_input(test_case: TestCase, entry: dict[str, Any]) -> str:
+    """Render a single data entry into a single user-prompt string.
 
-    A trivial, readable default: if ``data`` is empty, fall back to the test
+    A trivial, readable default: if the entry is empty, fall back to the test
     case name; otherwise emit the inputs as pretty JSON. Replace this with
     whatever shape your target expects.
     """
 
-    data: dict[str, Any] = test_case.data or {}
-    if not data:
+    if not entry:
         return test_case.name
-    return json.dumps(data, indent=2, ensure_ascii=False, sort_keys=True)
+    return json.dumps(entry, indent=2, ensure_ascii=False, sort_keys=True)
 
 
 class ReferencePromptExecutor(PromptExecutor):
@@ -49,11 +48,16 @@ class ReferencePromptExecutor(PromptExecutor):
     :class:`LLMRunner`. Swap the marked line for your own target invocation.
     """
 
-    async def execute(self, prompt: PromptText, test_case: TestCase) -> PromptResult:
-        """Run ``prompt`` against ``test_case`` and return its output."""
+    async def execute(
+        self,
+        prompt: PromptText,
+        test_case: TestCase,
+        entry: dict[str, Any],
+    ) -> PromptResult:
+        """Run ``prompt`` against one data ``entry`` and return its output."""
 
         system_prompt = prompt.text
-        user_prompt = render_test_case_input(test_case)
+        user_prompt = render_entry_input(test_case, entry)
 
         # >>> USER: replace this line with your own target invocation. <<<
         # The reference delegates to the active LLMRunner so the framework runs

@@ -17,7 +17,7 @@ through configuration (see :class:`app.config.Settings`).
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from app.models import (
     EvaluationSummary,
@@ -41,33 +41,53 @@ __all__ = [
 
 
 class PromptExecutor(ABC):
-    """Executes a prompt against a single test case and returns its output.
+    """Executes a prompt against a single data entry of a test case.
 
     User-supplied. The executor is responsible for whatever "running the prompt"
-    means for the user's use case (an LLM call, a tool invocation, etc.).
+    means for the user's use case (an LLM call, a tool invocation, etc.). It is
+    invoked once per data entry; the entry holds the inputs for that execution.
     """
 
     @abstractmethod
-    async def execute(self, prompt: PromptText, test_case: TestCase) -> PromptResult:
-        """Run ``prompt`` against ``test_case`` and return the produced result."""
+    async def execute(
+        self,
+        prompt: PromptText,
+        test_case: TestCase,
+        entry: dict[str, Any],
+    ) -> PromptResult:
+        """Run ``prompt`` against one data ``entry`` of ``test_case``."""
         raise NotImplementedError
 
 
 class Grader(ABC):
     """Scores a single :class:`PromptResult` and returns a structured evaluation.
 
-    User-supplied. A step ships no built-in LLM call — the scoring logic is
-    entirely up to the implementation. Each step exposes a ``name`` used for
+    User-supplied. A grader ships no built-in LLM call — the scoring logic is
+    entirely up to the implementation. Each grader exposes a ``name`` used for
     traceability in persisted reports.
+
+    Graders are invoked once per data entry; :meth:`criteria_for` resolves the
+    criteria to grade against — the entry's own criteria when present, the
+    dataset-level criteria otherwise.
     """
 
     name: str
 
+    def criteria_for(
+        self, test_case: TestCase, entry_index: int
+    ) -> dict[str, Any]:
+        """Criteria for ``entry_index``: per-entry first, dataset fallback."""
+
+        return test_case.criteria_for_entry(entry_index)
+
     @abstractmethod
     async def grade(
-        self, result: PromptResult, test_case: TestCase
+        self,
+        result: PromptResult,
+        test_case: TestCase,
+        entry_index: int = 0,
     ) -> PromptEvaluation:
-        """Evaluate ``result`` for ``test_case`` and return a structured score."""
+        """Grade ``result`` for one data entry and return a structured score."""
         raise NotImplementedError
 
 

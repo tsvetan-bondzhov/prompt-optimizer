@@ -76,6 +76,29 @@ def _parse_json_field(raw: str, field: str) -> dict[str, Any]:
     return value
 
 
+def _parse_json_array_field(raw: str, field: str) -> list[dict[str, Any]]:
+    """Parse a JSON array-of-objects form field (a single object is wrapped)."""
+
+    raw = (raw or "").strip() or "[]"
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Field {field!r} is not valid JSON: {exc}.",
+        ) from None
+    if isinstance(value, dict):
+        value = [value]
+    if not isinstance(value, list) or any(
+        not isinstance(item, dict) for item in value
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Field {field!r} must be a JSON array of objects.",
+        )
+    return value
+
+
 # --------------------------------------------------------------------------
 # Dashboard
 # --------------------------------------------------------------------------
@@ -126,7 +149,11 @@ async def test_case_create(
     form = await request.form()
     test_case = TestCase(
         name=str(form.get("name", "")).strip(),
-        data=_parse_json_field(str(form.get("data", "")), "data"),
+        data=_parse_json_array_field(str(form.get("data", "")), "data"),
+        evaluation_criteria_per_entry=_parse_json_array_field(
+            str(form.get("evaluation_criteria_per_entry", "")),
+            "evaluation_criteria_per_entry",
+        ),
         evaluation_criteria=_parse_json_field(
             str(form.get("evaluation_criteria", "")), "evaluation_criteria"
         ),
@@ -156,7 +183,10 @@ async def test_case_import(
     for item in items:
         test_case = TestCase(
             name=str(item.get("name", "")).strip(),
-            data=item.get("data") or {},
+            data=item.get("data") or [],
+            evaluation_criteria_per_entry=(
+                item.get("evaluation_criteria_per_entry") or []
+            ),
             evaluation_criteria=item.get("evaluation_criteria") or {},
         )
         await repo.create(test_case.model_dump())
@@ -186,7 +216,11 @@ async def test_case_update(
         test_case_id,
         {
             "name": str(form.get("name", "")).strip(),
-            "data": _parse_json_field(str(form.get("data", "")), "data"),
+            "data": _parse_json_array_field(str(form.get("data", "")), "data"),
+            "evaluation_criteria_per_entry": _parse_json_array_field(
+                str(form.get("evaluation_criteria_per_entry", "")),
+                "evaluation_criteria_per_entry",
+            ),
             "evaluation_criteria": _parse_json_field(
                 str(form.get("evaluation_criteria", "")), "evaluation_criteria"
             ),

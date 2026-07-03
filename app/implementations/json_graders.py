@@ -123,15 +123,20 @@ class JsonSchemaValidationGrader(_JsonGraderBase):
 
     name = "json_schema"
 
-    def _schema(self, test_case: TestCase) -> Optional[dict[str, Any]]:
-        criteria: dict[str, Any] = test_case.evaluation_criteria or {}
+    def _schema(
+        self, test_case: TestCase, entry_index: int
+    ) -> Optional[dict[str, Any]]:
+        criteria: dict[str, Any] = self.criteria_for(test_case, entry_index)
         schema = criteria.get("json_schema", criteria.get("schema"))
         return schema if isinstance(schema, dict) else None
 
     async def grade(
-        self, result: PromptResult, test_case: TestCase
+        self,
+        result: PromptResult,
+        test_case: TestCase,
+        entry_index: int = 0,
     ) -> PromptEvaluation:
-        schema = self._schema(test_case)
+        schema = self._schema(test_case, entry_index)
         if schema is None:
             return PromptEvaluation(
                 strengths=["Output produced for the test case"],
@@ -205,16 +210,19 @@ class JsonExpectedMatchGrader(_JsonGraderBase):
     name = "json_expected_match"
 
     def _expected(
-        self, test_case: TestCase
+        self, test_case: TestCase, entry_index: int
     ) -> Optional[dict[str, Any] | list[Any]]:
-        criteria: dict[str, Any] = test_case.evaluation_criteria or {}
+        criteria: dict[str, Any] = self.criteria_for(test_case, entry_index)
         expected = criteria.get("expected_json", criteria.get("expected"))
         return expected if isinstance(expected, (dict, list)) else None
 
     async def grade(
-        self, result: PromptResult, test_case: TestCase
+        self,
+        result: PromptResult,
+        test_case: TestCase,
+        entry_index: int = 0,
     ) -> PromptEvaluation:
-        expected = self._expected(test_case)
+        expected = self._expected(test_case, entry_index)
         if expected is None:
             return PromptEvaluation(
                 strengths=["Output produced for the test case"],

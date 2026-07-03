@@ -89,3 +89,42 @@ async def test_progress_hook_receives_events(db):
     executed = [e for e in events if e["event"] == "executed"]
     assert len(executed) == 2
     assert events[-1]["event"] == "completed"
+
+
+async def test_each_data_entry_executed_and_scored_individually(db):
+    # One test case with 3 data entries: the shared grader yields 4, 8, 9.
+    step = FakeGrader(scores=(4, 8, 9))
+    evaluator = make_evaluator(db, [step])
+    test_case = TestCase(name="tc", data=[{"a": 1}, {"a": 2}, {"a": 3}])
+
+    result = await evaluator.run(PromptText(text="p"), [test_case], 1)
+
+    point = result.points[0]
+    assert len(point.entry_results) == 3
+    assert [er.score for er in point.entry_results] == [4.0, 8.0, 9.0]
+    assert point.aggregated_score == pytest.approx(7.0)  # mean over entries
+    assert step.calls == 3
+
+
+async def test_failing_entry_is_isolated(db):
+    # First entry fails, second scores 9 -> point = mean(1, 9) = 5.
+    class FailFirstExecutor(FakeExecutor):
+        async def execute(self, prompt, test_case, entry=None):
+            if entry and entry.get("boom"):
+                raise RuntimeError("scripted entry failure")
+            return await super().execute(prompt, test_case, entry)
+
+    evaluator = EvaluatorService(
+        EvaluationReportRepository(db),
+        EvaluationRunRepository(db),
+        executor_resolver=FailFirstExecutor,
+        graders_resolver=lambda: [FakeGrader(scores=(9,))],
+        aggregator_resolver=lambda: mean_aggregator,
+    )
+    test_case = TestCase(name="tc", data=[{"boom": True}, {"ok": True}])
+    result = await evaluator.run(PromptText(text="p"), [test_case], 1)
+
+    point = result.points[0]
+    assert point.aggregated_score == pytest.approx(5.0)
+    report = await EvaluationReportRepository(db).get(result.report_ids[0])
+    assert any("scripted entry failure" in w for w in report["weaknesses"])

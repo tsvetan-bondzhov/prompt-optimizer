@@ -57,3 +57,24 @@ def test_run_config_bounds():
 def test_test_case_create_requires_name():
     with pytest.raises(ValidationError):
         TestCaseCreate(name="")
+
+
+def test_test_case_data_coerces_legacy_object():
+    tc = TestCaseCreate(name="tc", data={"input": "x"})
+    assert tc.data == [{"input": "x"}]
+
+
+def test_criteria_fallback_per_entry_then_dataset():
+    from app.models import TestCase
+
+    tc = TestCase(
+        name="tc",
+        data=[{"a": 1}, {"a": 2}, {"a": 3}],
+        evaluation_criteria_per_entry=[{"keywords": ["one"]}, {}],
+        evaluation_criteria={"keywords": ["fallback"]},
+    )
+    assert tc.criteria_for_entry(0) == {"keywords": ["one"]}
+    # Empty per-entry criteria falls back to the dataset criteria.
+    assert tc.criteria_for_entry(1) == {"keywords": ["fallback"]}
+    # Missing per-entry criteria (index out of range) falls back too.
+    assert tc.criteria_for_entry(2) == {"keywords": ["fallback"]}

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from app.models.common import new_id, utcnow
 from app.models.evaluation import (
+    DataEntryResult,
     EvaluationPoint,
     EvaluationReport,
     EvaluationRun,
@@ -34,6 +35,7 @@ __all__ = [
     "TestCaseCreate",
     # evaluation
     "PromptEvaluation",
+    "DataEntryResult",
     "EvaluationPoint",
     "EvaluationReport",
     "EvaluationRun",

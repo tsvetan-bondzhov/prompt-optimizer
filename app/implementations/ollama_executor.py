@@ -1,7 +1,7 @@
 """Ollama-backed :class:`PromptExecutor` for a locally served Mistral model.
 
 The prompt is treated as an ST-extension-style template: ``{placeholder}``
-tokens are replaced with the matching values from ``test_case.data`` (matched
+tokens are replaced with the matching values from the data entry (matched
 by field name), and escaped curly brackets (``\\{`` / ``\\}``) are unescaped to
 literal braces. The rendered prompt is then sent to Ollama's ``/api/generate``
 endpoint (non-streaming) and the model's response text is returned.
@@ -71,11 +71,16 @@ def render_prompt_template(template: str, data: dict[str, Any]) -> str:
 class OllamaMistralExecutor(PromptExecutor):
     """Executor that renders the prompt template and runs it via local Ollama."""
 
-    async def execute(self, prompt: PromptText, test_case: TestCase) -> PromptResult:
-        """Render ``prompt`` with ``test_case.data`` and generate via Ollama."""
+    async def execute(
+        self,
+        prompt: PromptText,
+        test_case: TestCase,
+        entry: dict[str, Any],
+    ) -> PromptResult:
+        """Render ``prompt`` with the data ``entry`` and generate via Ollama."""
 
         settings = get_settings()
-        rendered = render_prompt_template(prompt.text, test_case.data or {})
+        rendered = render_prompt_template(prompt.text, entry or {})
         payload = {
             "model": settings.OLLAMA_MODEL,
             "prompt": rendered,

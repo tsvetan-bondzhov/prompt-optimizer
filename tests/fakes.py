@@ -27,7 +27,12 @@ class FakeExecutor(PromptExecutor):
     def __init__(self) -> None:
         self.calls: list[tuple[str, str]] = []
 
-    async def execute(self, prompt: PromptText, test_case: TestCase) -> PromptResult:
+    async def execute(
+        self,
+        prompt: PromptText,
+        test_case: TestCase,
+        entry: dict | None = None,
+    ) -> PromptResult:
         self.calls.append((prompt.text, test_case.id))
         return PromptResult(text=f"result[{test_case.name}]: {prompt.text}")
 
@@ -42,7 +47,10 @@ class FakeGrader(Grader):
         self.calls = 0
 
     async def grade(
-        self, result: PromptResult, test_case: TestCase
+        self,
+        result: PromptResult,
+        test_case: TestCase,
+        entry_index: int = 0,
     ) -> PromptEvaluation:
         self.calls += 1
         score = self._scores.popleft() if self._scores else self._last
@@ -61,7 +69,10 @@ class FailingGrader(Grader):
     name = "failing-step"
 
     async def grade(
-        self, result: PromptResult, test_case: TestCase
+        self,
+        result: PromptResult,
+        test_case: TestCase,
+        entry_index: int = 0,
     ) -> PromptEvaluation:
         raise RuntimeError("scripted step failure")
 

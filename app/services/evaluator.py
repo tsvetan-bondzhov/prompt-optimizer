@@ -1,4 +1,4 @@
-"""PromptText Evaluator service (Task 08).
+"""Prompt Evaluator service (Task 08).
 
 The :class:`EvaluatorService` runs a single prompt against a set of test cases,
 ``executions_per_test_case`` times each, applies the ordered user-supplied
@@ -39,6 +39,7 @@ from app.db.repositories.reports import (
     EvaluationRunRepository,
 )
 from app.models import (
+    DataEntryResult,
     EvaluationPoint,
     EvaluationReport,
     EvaluationRun,
@@ -260,29 +261,63 @@ class EvaluatorService:
     ) -> tuple[EvaluationPoint, str, Optional[str]]:
         """Run one evaluation point, persist its report, and return both.
 
-        Robustness: a failure in the executor or any step is captured as a
-        recorded *failed* report (score ``1``) rather than aborting the run. The
-        returned error string (or ``None``) is surfaced in progress events.
+        Every data entry of the test case is executed and graded individually;
+        the point score is the mean of the per-entry scores. Robustness: a
+        failure while executing/grading an entry is captured as a *failed*
+        entry (score ``1``) rather than aborting the run. The returned error
+        string (or ``None``) is surfaced in progress events.
         """
 
-        error: Optional[str] = None
-        try:
-            result = await executor.execute(prompt, test_case)
-            grader_evals = await self._run_steps(steps, result, test_case)
-            point_score = float(aggregator(grader_evals)) if grader_evals else 0.0
-            # Aggregated point score must satisfy EvaluationPoint's [1, 10] bound.
-            aggregated_score = _clamp_score(point_score)
-            result_text = result.text
-        except Exception as exc:  # one bad point must not abort the whole run
-            logger.exception(
-                "Evaluation point failed (test_case=%s, i=%s)",
-                test_case.id,
-                execution_index,
-            )
-            error = str(exc)
-            grader_evals = []
-            aggregated_score = 1.0
-            result_text = ""
+        entries = test_case.data or [{}]
+        entry_results: list[DataEntryResult] = []
+        errors: list[str] = []
+
+        for entry_index, entry in enumerate(entries):
+            try:
+                result = await executor.execute(prompt, test_case, entry)
+                grader_evals = await self._run_graders(
+                    steps, result, test_case, entry_index
+                )
+                entry_score = (
+                    float(aggregator(grader_evals)) if grader_evals else 0.0
+                )
+                entry_results.append(
+                    DataEntryResult(
+                        entry_index=entry_index,
+                        prompt_result=result.text,
+                        grader_evaluations=grader_evals,
+                        score=_clamp_score(entry_score),
+                    )
+                )
+            except Exception as exc:  # one bad entry must not abort the run
+                logger.exception(
+                    "Evaluation entry failed (test_case=%s, i=%s, entry=%s)",
+                    test_case.id,
+                    execution_index,
+                    entry_index,
+                )
+                errors.append(f"entry {entry_index}: {exc}")
+                entry_results.append(
+                    DataEntryResult(
+                        entry_index=entry_index,
+                        prompt_result="",
+                        grader_evaluations=[],
+                        score=1.0,
+                    )
+                )
+
+        error: Optional[str] = "; ".join(errors) if errors else None
+        aggregated_score = _clamp_score(
+            sum(er.score for er in entry_results) / len(entry_results)
+        )
+        grader_evals = [
+            evaluation
+            for er in entry_results
+            for evaluation in er.grader_evaluations
+        ]
+        result_text = "\n\n".join(
+            er.prompt_result for er in entry_results if er.prompt_result
+        )
 
         merged = _merge_evaluations(grader_evals, error=error)
 
@@ -297,6 +332,7 @@ class EvaluatorService:
             weaknesses=merged["weaknesses"],
             reasoning=merged["reasoning"],
             grader_evaluations=grader_evals,
+            entry_results=entry_results,
         )
         stored = await self._reports.create(report.model_dump())
         report_id = stored.get("id", report.id)
@@ -305,25 +341,27 @@ class EvaluatorService:
             test_case_id=test_case.id,
             execution_index=execution_index,
             prompt_result=result_text,
+            entry_results=entry_results,
             grader_evaluations=grader_evals,
             aggregated_score=aggregated_score,
         )
         return point, report_id, error
 
-    async def _run_steps(
+    async def _run_graders(
         self,
-        steps: list[Grader],
+        graders: list[Grader],
         result: PromptResult,
         test_case: TestCase,
+        entry_index: int,
     ) -> list[PromptEvaluation]:
-        """Run the ordered steps sequentially, tagging each with its step name."""
+        """Run the ordered graders sequentially, tagging each with its name."""
 
         evaluations: list[PromptEvaluation] = []
-        for step in steps:
-            evaluation = await step.grade(result, test_case)
+        for grader in graders:
+            evaluation = await grader.grade(result, test_case, entry_index)
             if evaluation.grader_name is None:
                 evaluation = evaluation.model_copy(
-                    update={"grader_name": getattr(step, "name", None)}
+                    update={"grader_name": getattr(grader, "name", None)}
                 )
             evaluations.append(evaluation)
         return evaluations

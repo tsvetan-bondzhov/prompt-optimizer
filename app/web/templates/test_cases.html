@@ -33,9 +33,9 @@
 
 <section>
   <h2>Bulk import</h2>
-  <p class="muted">Paste a JSON array of <code>{"name", "data", "evaluation_criteria"}</code> objects.</p>
+  <p class="muted">Paste a JSON array of <code>{"name", "data", "evaluation_criteria_per_entry", "evaluation_criteria"}</code> objects (<code>data</code> is an array of entries).</p>
   <form method="post" action="/test-cases/import">
-    <textarea name="payload" rows="6" placeholder='[{"name": "example", "data": {"input": "..."}, "evaluation_criteria": {"keywords": ["..."]}}]'></textarea>
+    <textarea name="payload" rows="6" placeholder='[{"name": "example", "data": [{"input": "..."}], "evaluation_criteria": {"keywords": ["..."]}}]'></textarea>
     <button class="btn" type="submit">Import</button>
   </form>
 </section>

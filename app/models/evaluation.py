@@ -54,11 +54,24 @@ class PromptEvaluation(BaseModel):
         return value
 
 
+class DataEntryResult(BaseModel):
+    """The executed + graded outcome of a single data entry."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    entry_index: int = Field(..., ge=0)
+    prompt_result: str = Field(..., description="The execution output text.")
+    grader_evaluations: list[PromptEvaluation] = Field(default_factory=list)
+    score: float = Field(..., ge=1, le=10)
+
+
 class EvaluationPoint(BaseModel):
     """One ``(test_case × execution_index)`` evaluation, in memory.
 
-    Holds the executed result, the per-grader evaluations, and the aggregated
-    score for the point (default aggregation: mean of step scores).
+    Each data entry of the test case is executed and graded individually
+    (see :class:`DataEntryResult`); ``aggregated_score`` is the mean of the
+    per-entry scores. ``prompt_result`` and ``grader_evaluations`` are the
+    flattened views across all entries (kept for reports/summaries).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -66,6 +79,7 @@ class EvaluationPoint(BaseModel):
     test_case_id: str
     execution_index: int = Field(..., ge=0)
     prompt_result: str = Field(..., description="The execution output text.")
+    entry_results: list[DataEntryResult] = Field(default_factory=list)
     grader_evaluations: list[PromptEvaluation] = Field(default_factory=list)
     aggregated_score: float = Field(..., ge=1, le=10)
 
@@ -101,6 +115,7 @@ class EvaluationReport(BaseModel):
     weaknesses: list[str] = Field(default_factory=list)
     reasoning: str = Field(default="")
     grader_evaluations: list[PromptEvaluation] = Field(default_factory=list)
+    entry_results: list[DataEntryResult] = Field(default_factory=list)
 
 
 class EvaluationRun(BaseModel):

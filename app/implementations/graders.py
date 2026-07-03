@@ -61,20 +61,25 @@ class KeywordCoverageGrader(Grader):
 
     name = "keyword_coverage"
 
-    def _expected_keywords(self, test_case: TestCase) -> list[str]:
-        criteria: dict[str, Any] = test_case.evaluation_criteria or {}
+    def _expected_keywords(
+        self, test_case: TestCase, entry_index: int
+    ) -> list[str]:
+        criteria: dict[str, Any] = self.criteria_for(test_case, entry_index)
         raw = criteria.get("keywords", criteria.get("expected_keywords", []))
         if isinstance(raw, str):
             raw = [raw]
         return [str(k).strip() for k in raw if str(k).strip()]
 
     async def grade(
-        self, result: PromptResult, test_case: TestCase
+        self,
+        result: PromptResult,
+        test_case: TestCase,
+        entry_index: int = 0,
     ) -> PromptEvaluation:
         """Derive a keyword-coverage evaluation from ``result`` and ``test_case``."""
 
         # >>> USER: this is the heuristic you would replace with your own scoring.
-        keywords = self._expected_keywords(test_case)
+        keywords = self._expected_keywords(test_case, entry_index)
         text_lower = result.text.lower()
 
         if not keywords:
@@ -128,12 +133,15 @@ class ResponseQualityGrader(Grader):
     name = "response_quality"
 
     async def grade(
-        self, result: PromptResult, test_case: TestCase
+        self,
+        result: PromptResult,
+        test_case: TestCase,
+        entry_index: int = 0,
     ) -> PromptEvaluation:
         """Derive a shape/quality evaluation from ``result`` and ``test_case``."""
 
         # >>> USER: replace this block with your own quality signals.
-        criteria: dict[str, Any] = test_case.evaluation_criteria or {}
+        criteria: dict[str, Any] = self.criteria_for(test_case, entry_index)
         text = result.text.strip()
         length = len(text)
         min_length = int(criteria.get("min_length", 1))
