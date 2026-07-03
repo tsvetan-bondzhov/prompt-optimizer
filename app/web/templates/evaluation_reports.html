@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Evaluation Reports — Prompt Optimizer{% endblock %}
+{% block title %}Evaluation Reports â€” Prompt Optimizer{% endblock %}
 {% block content %}
 <div class="section-head">
   <h1>Evaluation reports <code>{{ run_id[:8] }}</code></h1>
@@ -11,11 +11,11 @@
   <div class="card">
     <h3>Run</h3>
     <p><span class="status status-{{ run.status }}">{{ run.status }}</span>
-       {% if run.avg_score is not none %} · avg <span class="score">{{ '%.2f'|format(run.avg_score) }}</span>{% endif %}
-       · {{ run.executions_per_test_case }}× per test case</p>
+       {% if run.avg_score is not none %} Â· avg <span class="score">{{ '%.2f'|format(run.avg_score) }}</span>{% endif %}
+       Â· {{ run.executions_per_test_case }}Ã— per test case</p>
   </div>
   <div class="card">
-    <h3>Prompt{% if run.prompt_name %} � {{ run.prompt_name }}{% endif %}</h3>
+    <h3>Prompt{% if run.prompt_name %} — {{ run.prompt_name }}{% endif %}</h3>
     <pre class="prompt small">{{ run.prompt }}</pre>
   </div>
 </div>
@@ -40,6 +40,6 @@
   </tbody>
 </table>
 {% else %}
-<p class="muted">No reports yet — the run may still be in progress.</p>
+<p class="muted">No reports yet â€” the run may still be in progress.</p>
 {% endif %}
 {% endblock %}

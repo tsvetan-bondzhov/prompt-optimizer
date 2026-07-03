@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Report — Prompt Optimizer{% endblock %}
+{% block title %}Report â€” Prompt Optimizer{% endblock %}
 {% block content %}
 <div class="section-head">
   <h1>Evaluation report <code>{{ report.id[:8] }}</code></h1>
@@ -20,7 +20,7 @@
 </div>
 
 <section>
-  <h2>Prompt{% if report.prompt_name %} � {{ report.prompt_name }}{% endif %}</h2>
+  <h2>Prompt{% if report.prompt_name %} — {{ report.prompt_name }}{% endif %}</h2>
   <pre class="prompt">{{ report.prompt }}</pre>
 </section>
 
@@ -32,11 +32,11 @@
 <div class="cards">
   <div class="card ok">
     <h3>Strengths</h3>
-    <ul>{% for s in report.strengths %}<li>{{ s }}</li>{% else %}<li class="muted">—</li>{% endfor %}</ul>
+    <ul>{% for s in report.strengths %}<li>{{ s }}</li>{% else %}<li class="muted">â€”</li>{% endfor %}</ul>
   </div>
   <div class="card warn">
     <h3>Weaknesses</h3>
-    <ul>{% for w in report.weaknesses %}<li>{{ w }}</li>{% else %}<li class="muted">—</li>{% endfor %}</ul>
+    <ul>{% for w in report.weaknesses %}<li>{{ w }}</li>{% else %}<li class="muted">â€”</li>{% endfor %}</ul>
   </div>
 </div>
 
