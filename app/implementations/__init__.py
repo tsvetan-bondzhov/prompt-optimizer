@@ -15,12 +15,12 @@ from app.implementations import (  # noqa: F401
     executor,
     graders,
     json_graders,
-    ollama_executor,
+    template_executor,
 )
 
 __all__ = [
     "executor",
     "graders",
     "json_graders",
-    "ollama_executor",
+    "template_executor",
 ]

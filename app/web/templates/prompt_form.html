@@ -16,6 +16,14 @@
     <textarea name="current_prompt" rows="10" required>{{ prompt.current_prompt if prompt else '' }}</textarea>
   </label>
   {% if prompt %}<p class="muted">Editing the prompt text resets the measured score — the next optimization run re-establishes a baseline.</p>{% endif %}
+  <label>LLM runner for the optimizer
+    <select name="optimizer_llm_runner">
+      {% set current_runner = prompt.optimizer_llm_runner if prompt and prompt.optimizer_llm_runner else '' %}
+      {% for r in available_llm_runners %}
+      <option value="{{ r }}" {% if r == current_runner %}selected{% endif %}>{{ r }}</option>
+      {% endfor %}
+    </select>
+  </label>
   <fieldset>
     <legend>Test cases</legend>
     {% if test_cases %}

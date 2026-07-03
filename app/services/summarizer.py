@@ -22,10 +22,10 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable, Sequence
-from typing import Union
+from typing import Optional, Union
 
-from app.core.interfaces import Summarizer
-from app.core.registry import get_summarizer
+from app.core.interfaces import LLMRunner, Summarizer
+from app.core.registry import get_llm_runner, get_summarizer
 from app.models import EvaluationPoint, EvaluationSummary, PromptEvaluation
 
 __all__ = ["SummarizerService"]
@@ -51,19 +51,29 @@ class SummarizerService:
 
         self._summarizer_resolver = summarizer_resolver
 
-    async def summarize(self, points: SummarizeInput) -> EvaluationSummary:
+    async def summarize(
+        self,
+        points: SummarizeInput,
+        llm_runner_name: Optional[str] = None,
+    ) -> EvaluationSummary:
         """Merge ``points`` into a single :class:`EvaluationSummary`.
 
         :param points: Either a sequence of :class:`EvaluationPoint` (the loop's
             ``eval_result.points``) or a flat sequence of
             :class:`PromptEvaluation`. Points are flattened into their per-grader
             evaluations before delegation.
+        :param llm_runner_name: Registered LLM runner to summarize with (from
+            the test case's ``summarizer_llm_runner``); ``None`` uses the
+            active default.
         :returns: The consolidated summary produced by the active summarizer.
         """
 
         evaluations = self._flatten(points)
         summarizer = self._summarizer_resolver()
-        return await summarizer.summarize(evaluations)
+        llm_runner: Optional[LLMRunner] = (
+            get_llm_runner(llm_runner_name) if llm_runner_name else None
+        )
+        return await summarizer.summarize(evaluations, llm_runner)
 
     @staticmethod
     def _flatten(points: SummarizeInput) -> list[PromptEvaluation]:

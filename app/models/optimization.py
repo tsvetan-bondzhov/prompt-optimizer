@@ -65,6 +65,11 @@ class Prompt(BaseModel):
     strengths: list[str] = Field(default_factory=list)
     weaknesses: list[str] = Field(default_factory=list)
     reasoning: str = Field(default="")
+    optimizer_llm_runner: str = Field(
+        default_factory=lambda: get_settings().ACTIVE_LLM_RUNNER,
+        min_length=1,
+        description="LLM runner used by the prompt optimizer for this prompt.",
+    )
     updated_at: datetime = Field(default_factory=utcnow)
 
 
@@ -128,3 +133,7 @@ class OptimizationContext(BaseModel):
     avg_score: float | None = Field(default=None, ge=1, le=10)
     reasoning: str = Field(default="")
     system_prompt: str | None = Field(default=None)
+    llm_runner_name: str | None = Field(
+        default=None,
+        description="Registered LLM runner the optimizer should use.",
+    )

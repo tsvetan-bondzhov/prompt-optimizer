@@ -32,6 +32,7 @@ class FakeExecutor(PromptExecutor):
         prompt: PromptText,
         test_case: TestCase,
         entry: dict | None = None,
+        llm_runner=None,
     ) -> PromptResult:
         self.calls.append((prompt.text, test_case.id))
         return PromptResult(text=f"result[{test_case.name}]: {prompt.text}")
@@ -95,7 +96,9 @@ class FakeSummarizer(Summarizer):
     """Deterministic merge: first-seen strengths/weaknesses, joined reasoning."""
 
     async def summarize(
-        self, evaluations: list[PromptEvaluation]
+        self,
+        evaluations: list[PromptEvaluation],
+        llm_runner=None,
     ) -> EvaluationSummary:
         strengths: list[str] = []
         weaknesses: list[str] = []

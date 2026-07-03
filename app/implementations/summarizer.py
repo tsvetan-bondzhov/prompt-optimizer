@@ -29,7 +29,7 @@ import logging
 from collections import Counter
 from typing import Any
 
-from app.core.interfaces import Summarizer
+from app.core.interfaces import LLMRunner, Summarizer
 from app.core.registry import get_llm_runner, register
 from app.models import EvaluationSummary, PromptEvaluation
 
@@ -138,7 +138,9 @@ class FrequencySummarizer(Summarizer):
         self._top_k = max(1, top_k)
 
     async def summarize(
-        self, evaluations: list[PromptEvaluation]
+        self,
+        evaluations: list[PromptEvaluation],
+        llm_runner: LLMRunner | None = None,
     ) -> EvaluationSummary:
         """Merge ``evaluations`` into one summary by frequency (no I/O)."""
 
@@ -172,9 +174,11 @@ class LLMSummarizer(Summarizer):
         self._top_k = max(1, top_k)
 
     async def summarize(
-        self, evaluations: list[PromptEvaluation]
+        self,
+        evaluations: list[PromptEvaluation],
+        llm_runner: LLMRunner | None = None,
     ) -> EvaluationSummary:
-        """Summarize ``evaluations`` via the active LLM, falling back on error."""
+        """Summarize ``evaluations`` via the selected LLM, falling back on error."""
 
         if not evaluations:
             return aggregate_by_frequency(evaluations, self._top_k)
@@ -182,7 +186,7 @@ class LLMSummarizer(Summarizer):
         user_prompt = self._compose_user_prompt(evaluations)
 
         try:
-            runner = get_llm_runner()
+            runner = llm_runner if llm_runner is not None else get_llm_runner()
             raw = await runner.run(self.SYSTEM_PROMPT, user_prompt)
             return self._parse_summary(raw)
         except Exception as exc:  # noqa: BLE001 - fall back on any failure

@@ -27,6 +27,7 @@ class PromptCreate(BaseModel):
     goal: str = Field(..., min_length=1)
     current_prompt: str = Field(..., min_length=1)
     test_case_ids: list[str] = Field(default_factory=list)
+    optimizer_llm_runner: Optional[str] = Field(default=None, min_length=1)
 
 
 class PromptUpdate(BaseModel):
@@ -38,6 +39,7 @@ class PromptUpdate(BaseModel):
     goal: Optional[str] = Field(default=None, min_length=1)
     current_prompt: Optional[str] = Field(default=None, min_length=1)
     test_case_ids: Optional[list[str]] = Field(default=None)
+    optimizer_llm_runner: Optional[str] = Field(default=None, min_length=1)
 
 
 async def _validate_test_case_ids(
@@ -65,7 +67,7 @@ async def create_prompt(
     test_cases: TestCaseRepository = Depends(get_test_case_repository),
 ) -> Any:
     await _validate_test_case_ids(payload.test_case_ids, test_cases)
-    prompt = Prompt(**payload.model_dump())
+    prompt = Prompt(**payload.model_dump(exclude_none=True))
     return await repo.create(prompt.model_dump())
 
 

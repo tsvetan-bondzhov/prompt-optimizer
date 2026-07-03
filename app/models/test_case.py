@@ -23,6 +23,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.config import get_settings
 from app.models.common import new_id, utcnow
 
 
@@ -60,6 +61,21 @@ class _TestCaseFields(BaseModel):
     grader_names: list[str] = Field(
         default_factory=list,
         description="Registered grader names to execute for this test case.",
+    )
+    executor_name: str = Field(
+        default="default",
+        min_length=1,
+        description="Registered executor used to run the prompt.",
+    )
+    executor_llm_runner: str = Field(
+        default_factory=lambda: get_settings().ACTIVE_LLM_RUNNER,
+        min_length=1,
+        description="LLM runner the executor delegates prompt execution to.",
+    )
+    summarizer_llm_runner: str = Field(
+        default_factory=lambda: get_settings().ACTIVE_LLM_RUNNER,
+        min_length=1,
+        description="LLM runner used when summarizing this test case's results.",
     )
 
     @field_validator("data", mode="before")

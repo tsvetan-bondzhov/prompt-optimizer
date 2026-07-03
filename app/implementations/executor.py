@@ -20,8 +20,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from app.core.interfaces import PromptExecutor
-from app.core.registry import get_llm_runner, register
+from app.core.interfaces import LLMRunner, PromptExecutor
+from app.core.registry import register
 from app.models import PromptText, PromptResult, TestCase
 
 __all__ = ["ReferencePromptExecutor", "render_entry_input"]
@@ -53,6 +53,7 @@ class ReferencePromptExecutor(PromptExecutor):
         prompt: PromptText,
         test_case: TestCase,
         entry: dict[str, Any],
+        llm_runner: LLMRunner,
     ) -> PromptResult:
         """Run ``prompt`` against one data ``entry`` and return its output."""
 
@@ -60,9 +61,9 @@ class ReferencePromptExecutor(PromptExecutor):
         user_prompt = render_entry_input(test_case, entry)
 
         # >>> USER: replace this line with your own target invocation. <<<
-        # The reference delegates to the active LLMRunner so the framework runs
-        # end-to-end. Your executor might instead call an API, run a tool, etc.
-        output_text = await get_llm_runner().run(system_prompt, user_prompt)
+        # The reference delegates to the injected LLMRunner (selected on the
+        # test case). Your executor might instead call an API, run a tool, etc.
+        output_text = await llm_runner.run(system_prompt, user_prompt)
 
         return PromptResult(text=output_text)
 

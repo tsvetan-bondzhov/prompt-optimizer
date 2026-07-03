@@ -42,9 +42,11 @@ def register_builtins() -> None:
     # lazily to keep import-time side effects out of the core package.
     from app.llm.claude_code import ClaudeCodeRunner
     from app.llm.fake import FakeLLMRunner
+    from app.llm.ollama import OllamaLLMRunner
 
     register("llm_runner", "claude_code", ClaudeCodeRunner)
     register("llm_runner", "fake", FakeLLMRunner)
+    register("llm_runner", "ollama", OllamaLLMRunner)
 
     # Reference implementations (Task 07): importing the package fires the
     # module-level registrations — the reference PromptExecutor under

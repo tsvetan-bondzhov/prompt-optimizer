@@ -53,8 +53,14 @@ class PromptExecutor(ABC):
         prompt: PromptText,
         test_case: TestCase,
         entry: dict[str, Any],
+        llm_runner: LLMRunner,
     ) -> PromptResult:
-        """Run ``prompt`` against one data ``entry`` of ``test_case``."""
+        """Run ``prompt`` against one data ``entry`` of ``test_case``.
+
+        ``llm_runner`` is the runner selected on the test case
+        (``TestCase.executor_llm_runner``); executors that do not call an LLM
+        may ignore it.
+        """
         raise NotImplementedError
 
 
@@ -104,9 +110,16 @@ class Summarizer(ABC):
 
     @abstractmethod
     async def summarize(
-        self, evaluations: list[PromptEvaluation]
+        self,
+        evaluations: list[PromptEvaluation],
+        llm_runner: LLMRunner | None = None,
     ) -> EvaluationSummary:
-        """Merge ``evaluations`` into one :class:`EvaluationSummary`."""
+        """Merge ``evaluations`` into one :class:`EvaluationSummary`.
+
+        ``llm_runner`` is the runner selected for summarization (from the test
+        case's ``summarizer_llm_runner``); ``None`` means use the active
+        default. Non-LLM summarizers may ignore it.
+        """
         raise NotImplementedError
 
 

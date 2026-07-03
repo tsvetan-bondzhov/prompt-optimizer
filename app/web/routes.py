@@ -77,6 +77,17 @@ def _parse_json_field(raw: str, field: str) -> dict[str, Any]:
     return value
 
 
+def _runner_selection_fields(form: Any) -> dict[str, str]:
+    """Executor / LLM-runner selections from a test case form (when present)."""
+
+    fields: dict[str, str] = {}
+    for key in ("executor_name", "executor_llm_runner", "summarizer_llm_runner"):
+        value = str(form.get(key, "")).strip()
+        if value:
+            fields[key] = value
+    return fields
+
+
 def _parse_json_array_field(raw: str, field: str) -> list[dict[str, Any]]:
     """Parse a JSON array-of-objects form field (a single object is wrapped)."""
 
@@ -144,6 +155,8 @@ async def test_case_new(request: Request) -> HTMLResponse:
         "test_case_form.html",
         test_case=None,
         available_graders=available("grader"),
+        available_executors=available("executor"),
+        available_llm_runners=available("llm_runner"),
     )
 
 
@@ -164,6 +177,7 @@ async def test_case_create(
             str(form.get("evaluation_criteria", "")), "evaluation_criteria"
         ),
         grader_names=[str(v) for v in form.getlist("grader_names")],
+        **_runner_selection_fields(form),
     )
     await repo.create(test_case.model_dump())
     return RedirectResponse("/test-cases", status_code=status.HTTP_303_SEE_OTHER)
@@ -215,6 +229,8 @@ async def test_case_edit(
         "test_case_form.html",
         test_case=doc,
         available_graders=available("grader"),
+        available_executors=available("executor"),
+        available_llm_runners=available("llm_runner"),
     )
 
 
@@ -238,6 +254,7 @@ async def test_case_update(
                 str(form.get("evaluation_criteria", "")), "evaluation_criteria"
             ),
             "grader_names": [str(v) for v in form.getlist("grader_names")],
+            **_runner_selection_fields(form),
         },
     )
     return RedirectResponse("/test-cases", status_code=status.HTTP_303_SEE_OTHER)
@@ -275,6 +292,7 @@ async def prompt_new(
         "prompt_form.html",
         prompt=None,
         test_cases=await test_cases.list(limit=500),
+        available_llm_runners=available("llm_runner"),
     )
 
 
@@ -284,11 +302,13 @@ async def prompt_create(
     repo: PromptRepository = Depends(get_prompt_repository),
 ) -> RedirectResponse:
     form = await request.form()
+    optimizer_runner = str(form.get("optimizer_llm_runner", "")).strip()
     prompt = Prompt(
         name=str(form.get("name", "")).strip(),
         goal=str(form.get("goal", "")).strip(),
         current_prompt=str(form.get("current_prompt", "")),
         test_case_ids=[str(v) for v in form.getlist("test_case_ids")],
+        **({"optimizer_llm_runner": optimizer_runner} if optimizer_runner else {}),
     )
     await repo.create(prompt.model_dump())
     return RedirectResponse(
@@ -332,6 +352,7 @@ async def prompt_edit(
         "prompt_form.html",
         prompt=prompt,
         test_cases=await test_cases.list(limit=500),
+        available_llm_runners=available("llm_runner"),
     )
 
 
@@ -351,6 +372,9 @@ async def prompt_update(
         "current_prompt": str(form.get("current_prompt", "")),
         "test_case_ids": [str(v) for v in form.getlist("test_case_ids")],
     }
+    optimizer_runner = str(form.get("optimizer_llm_runner", "")).strip()
+    if optimizer_runner:
+        changes["optimizer_llm_runner"] = optimizer_runner
     # A manually edited prompt invalidates the measured score/summary.
     if changes["current_prompt"] != existing.get("current_prompt"):
         changes.update(

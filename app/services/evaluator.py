@@ -27,12 +27,14 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.core.interfaces import (
     Aggregator,
     Grader,
+    LLMRunner,
     PromptExecutor,
 )
 from app.core.registry import (
     get_aggregator,
     get_executor,
     get_grader,
+    get_llm_runner,
 )
 from app.db.repositories.reports import (
     EvaluationReportRepository,
@@ -59,8 +61,9 @@ logger = logging.getLogger(__name__)
 ProgressHook = Callable[[dict[str, Any]], Optional[Awaitable[None]]]
 
 # Resolver callables (default to the registry helpers, overridable for tests).
-ExecutorResolver = Callable[[], PromptExecutor]
+ExecutorResolver = Callable[[str], PromptExecutor]  # name -> executor
 GraderResolver = Callable[[str], Grader]  # name -> Grader instance
+LLMRunnerResolver = Callable[[str], LLMRunner]  # name -> runner
 AggregatorResolver = Callable[[], Aggregator]
 
 
@@ -92,13 +95,17 @@ class EvaluatorService:
         *,
         executor_resolver: ExecutorResolver = get_executor,
         grader_resolver: GraderResolver = get_grader,
+        llm_runner_resolver: LLMRunnerResolver = get_llm_runner,
         aggregator_resolver: AggregatorResolver = get_aggregator,
     ) -> None:
         """:param report_repository: Persists one report per evaluation point.
         :param run_repository: Persists/updates the grouping evaluation run.
-        :param executor_resolver: Returns the active :class:`PromptExecutor`.
+        :param executor_resolver: Resolves an executor name to an instance;
+            each test case selects its executor via ``executor_name``.
         :param grader_resolver: Resolves a grader name to an instance; each
             test case selects its graders via ``grader_names``.
+        :param llm_runner_resolver: Resolves an LLM runner name to an instance
+            (used for the test case's ``executor_llm_runner``).
         :param aggregator_resolver: Returns the per-point score aggregator.
         """
 
@@ -106,6 +113,7 @@ class EvaluatorService:
         self._runs = run_repository
         self._executor_resolver = executor_resolver
         self._grader_resolver = grader_resolver
+        self._llm_runner_resolver = llm_runner_resolver
         self._aggregator_resolver = aggregator_resolver
 
     async def run(
@@ -146,17 +154,24 @@ class EvaluatorService:
                 f"(got {executions_per_test_case})."
             )
 
-        executor = self._executor_resolver()
         aggregator = self._aggregator_resolver()
 
-        # Resolve each test case's selected graders up front (fail fast on an
-        # empty selection or an unknown grader name).
+        # Resolve each test case's executor, LLM runner, and selected graders
+        # up front (fail fast on an empty selection or an unknown name).
+        executors_by_case: dict[str, PromptExecutor] = {}
+        runners_by_case: dict[str, LLMRunner] = {}
         graders_by_case: dict[str, list[Grader]] = {}
         for test_case in test_cases:
             if not test_case.grader_names:
                 raise ValueError(
                     f"Test case {test_case.name!r} has no graders selected."
                 )
+            executors_by_case[test_case.id] = self._executor_resolver(
+                test_case.executor_name
+            )
+            runners_by_case[test_case.id] = self._llm_runner_resolver(
+                test_case.executor_llm_runner
+            )
             graders_by_case[test_case.id] = [
                 self._grader_resolver(name) for name in test_case.grader_names
             ]
@@ -190,7 +205,8 @@ class EvaluatorService:
                         prompt_name=prompt_name,
                         test_case=test_case,
                         execution_index=execution_index,
-                        executor=executor,
+                        executor=executors_by_case[test_case.id],
+                        llm_runner=runners_by_case[test_case.id],
                         graders=graders_by_case[test_case.id],
                         aggregator=aggregator,
                         run_id=run_id,
@@ -267,6 +283,7 @@ class EvaluatorService:
         test_case: TestCase,
         execution_index: int,
         executor: PromptExecutor,
+        llm_runner: LLMRunner,
         graders: list[Grader],
         aggregator: Aggregator,
         run_id: Optional[str],
@@ -286,7 +303,9 @@ class EvaluatorService:
 
         for entry_index, entry in enumerate(entries):
             try:
-                result = await executor.execute(prompt, test_case, entry)
+                result = await executor.execute(
+                    prompt, test_case, entry, llm_runner
+                )
                 grader_evals = await self._run_graders(
                     graders, result, test_case, entry_index
                 )

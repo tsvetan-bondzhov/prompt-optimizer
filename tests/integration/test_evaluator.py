@@ -19,7 +19,7 @@ def make_evaluator(db, graders) -> EvaluatorService:
     return EvaluatorService(
         EvaluationReportRepository(db),
         EvaluationRunRepository(db),
-        executor_resolver=FakeExecutor,
+        executor_resolver=lambda name: FakeExecutor(),
         grader_resolver=lambda name: by_name[name],
         aggregator_resolver=lambda: mean_aggregator,
     )
@@ -123,15 +123,15 @@ async def test_each_data_entry_executed_and_scored_individually(db):
 async def test_failing_entry_is_isolated(db):
     # First entry fails, second scores 9 -> point = mean(1, 9) = 5.
     class FailFirstExecutor(FakeExecutor):
-        async def execute(self, prompt, test_case, entry=None):
+        async def execute(self, prompt, test_case, entry=None, llm_runner=None):
             if entry and entry.get("boom"):
                 raise RuntimeError("scripted entry failure")
-            return await super().execute(prompt, test_case, entry)
+            return await super().execute(prompt, test_case, entry, llm_runner)
 
     evaluator = EvaluatorService(
         EvaluationReportRepository(db),
         EvaluationRunRepository(db),
-        executor_resolver=FailFirstExecutor,
+        executor_resolver=lambda name: FailFirstExecutor(),
         grader_resolver=lambda name: FakeGrader(scores=(9,)),
         aggregator_resolver=lambda: mean_aggregator,
     )
@@ -154,3 +154,35 @@ async def test_test_case_without_graders_rejected(db):
         await evaluator.run(
             PromptText(text="p"), make_test_cases(1, grader_names=[]), 1
         )
+
+
+async def test_executor_and_runner_resolved_per_test_case(db):
+    resolved: dict[str, list[str]] = {"executors": [], "runners": []}
+
+    def executor_resolver(name):
+        resolved["executors"].append(name)
+        return FakeExecutor()
+
+    def runner_resolver(name):
+        resolved["runners"].append(name)
+        return object()  # FakeExecutor ignores the runner
+
+    grader = FakeGrader(scores=(8,))
+    evaluator = EvaluatorService(
+        EvaluationReportRepository(db),
+        EvaluationRunRepository(db),
+        executor_resolver=executor_resolver,
+        grader_resolver=lambda name: grader,
+        llm_runner_resolver=runner_resolver,
+        aggregator_resolver=lambda: mean_aggregator,
+    )
+    test_case = TestCase(
+        name="tc",
+        grader_names=["fake-step"],
+        executor_name="template",
+        executor_llm_runner="ollama",
+    )
+    await evaluator.run(PromptText(text="p"), [test_case], 1)
+
+    assert resolved["executors"] == ["template"]
+    assert resolved["runners"] == ["ollama"]

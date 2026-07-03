@@ -46,7 +46,7 @@ class LLMOptimizer(PromptOptimizer):
         system_prompt = ctx.system_prompt or get_settings().OPTIMIZER_SYSTEM_PROMPT
         user_prompt = self._compose_user_prompt(ctx)
 
-        runner = get_llm_runner()
+        runner = get_llm_runner(ctx.llm_runner_name)
         raw = await runner.run(system_prompt, user_prompt)
         text = (raw or "").strip()
         if not text:

@@ -44,7 +44,7 @@ async def make_env(db, scores, *, avg_score=None):
     evaluator = EvaluatorService(
         EvaluationReportRepository(db),
         EvaluationRunRepository(db),
-        executor_resolver=FakeExecutor,
+        executor_resolver=lambda name: FakeExecutor(),
         grader_resolver=lambda name: step,
         aggregator_resolver=lambda: mean_aggregator,
     )

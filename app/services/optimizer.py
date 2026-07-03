@@ -277,7 +277,10 @@ class OptimizerService:
             progress=hook,
             prompt_name=prompt.name,
         )
-        summary = await self._summarizer.summarize(baseline.points)
+        summary = await self._summarizer.summarize(
+            baseline.points,
+            llm_runner_name=_summarizer_runner_name(test_cases),
+        )
         self._apply_summary(prompt, baseline.avg_score, summary)
         await self._persist_prompt(prompt)
 
@@ -305,6 +308,7 @@ class OptimizerService:
             avg_score=prompt.avg_score,
             reasoning=prompt.reasoning,
             system_prompt=get_settings().OPTIMIZER_SYSTEM_PROMPT,
+            llm_runner_name=prompt.optimizer_llm_runner,
         )
         optimizer = self._optimizer_resolver()
         proposed = await optimizer.optimize(ctx)
@@ -320,7 +324,10 @@ class OptimizerService:
         )
 
         # 3. Summarize and decide acceptance (strictly greater).
-        summary = await self._summarizer.summarize(eval_result.points)
+        summary = await self._summarizer.summarize(
+            eval_result.points,
+            llm_runner_name=_summarizer_runner_name(test_cases),
+        )
         new_avg = eval_result.avg_score
         accepted = previous_avg is not None and new_avg > previous_avg
 
@@ -389,3 +396,16 @@ class OptimizerService:
             await self._progress.publish(run_id, event)
         except Exception:  # progress must never break the loop
             logger.exception("Progress publish failed for run %s", run_id)
+
+
+def _summarizer_runner_name(test_cases: list[TestCase]) -> Optional[str]:
+    """The LLM runner used to summarize a run's results.
+
+    Summarization spans all test cases of the run, so the first test case's
+    ``summarizer_llm_runner`` selection wins.
+    """
+
+    for test_case in test_cases:
+        if test_case.summarizer_llm_runner:
+            return test_case.summarizer_llm_runner
+    return None

@@ -142,10 +142,10 @@ def clear(category: str | None = None) -> None:
 # --- Settings-driven resolver helpers ------------------------------------
 
 
-def get_executor() -> PromptExecutor:
-    """Resolve the active :class:`PromptExecutor` from settings."""
+def get_executor(name: str | None = None) -> PromptExecutor:
+    """Resolve a :class:`PromptExecutor` by ``name`` (active one when omitted)."""
 
-    return resolve("executor", get_settings().ACTIVE_EXECUTOR)
+    return resolve("executor", name or get_settings().ACTIVE_EXECUTOR)
 
 
 def get_grader(name: str) -> Grader:
@@ -170,10 +170,10 @@ def get_summarizer() -> Summarizer:
     return resolve("summarizer", get_settings().ACTIVE_SUMMARIZER)
 
 
-def get_llm_runner() -> LLMRunner:
-    """Resolve the active :class:`LLMRunner` from settings."""
+def get_llm_runner(name: str | None = None) -> LLMRunner:
+    """Resolve an :class:`LLMRunner` by ``name`` (active one when omitted)."""
 
-    return resolve("llm_runner", get_settings().ACTIVE_LLM_RUNNER)
+    return resolve("llm_runner", name or get_settings().ACTIVE_LLM_RUNNER)
 
 
 def get_aggregator() -> Aggregator:
