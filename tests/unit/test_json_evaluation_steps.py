@@ -267,6 +267,35 @@ async def test_array_vs_non_array_is_mismatch():
     assert any("expected an array" in w for w in evaluation.weaknesses)
 
 
+async def test_top_level_array_full_match_scores_10():
+    step = JsonExpectedMatchStep()
+    expected = [{"sku": "A", "qty": 1}, {"sku": "B", "qty": 2}]
+    evaluation = await step.evaluate(
+        result_of([{"sku": "A", "qty": 1}, {"sku": "B", "qty": 2}]),
+        make_case({"expected_json": expected}),
+    )
+    assert evaluation.score == 10
+
+
+async def test_top_level_array_partial_match():
+    step = JsonExpectedMatchStep()
+    # First element matches, second does not -> 1/2 -> 6.
+    evaluation = await step.evaluate(
+        result_of(["a", "x"]), make_case({"expected_json": ["a", "b"]})
+    )
+    assert evaluation.score == 6
+    assert any("$[1]" in w for w in evaluation.weaknesses)
+
+
+async def test_top_level_array_expected_but_object_output_scores_1():
+    step = JsonExpectedMatchStep()
+    evaluation = await step.evaluate(
+        result_of({"a": 1}), make_case({"expected_json": [1, 2]})
+    )
+    assert evaluation.score == 1
+    assert any("not a JSON array" in w for w in evaluation.weaknesses)
+
+
 async def test_expected_unparseable_and_non_object_score_1():
     step = JsonExpectedMatchStep()
     case = make_case({"expected_json": {"a": 1}})

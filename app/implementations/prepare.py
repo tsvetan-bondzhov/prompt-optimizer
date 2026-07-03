@@ -19,9 +19,13 @@ from __future__ import annotations
 
 from app.core.interfaces import EvaluationStep
 from app.core.registry import register
-from app.implementations.evaluation_steps import (
-    KeywordCoverageStep,
-    ResponseQualityStep,
+# from app.implementations.evaluation_steps import (
+#     KeywordCoverageStep,
+#     ResponseQualityStep,
+# )
+from app.implementations.json_evaluation_steps import (
+    JsonExpectedMatchStep,
+    JsonSchemaValidationStep,
 )
 
 __all__ = ["prepare_evaluation"]
@@ -32,8 +36,8 @@ def prepare_evaluation() -> list[EvaluationStep]:
 
     # >>> USER: add / remove / reorder your evaluation steps here. <<<
     return [
-        KeywordCoverageStep(),
-        ResponseQualityStep(),
+        JsonSchemaValidationStep(),
+        JsonExpectedMatchStep(),
     ]
 
 

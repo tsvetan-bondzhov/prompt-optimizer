@@ -5,6 +5,11 @@ via :func:`asyncio.create_subprocess_exec` (never blocking the event loop). The
 composed ``system + user`` prompt is passed on stdin and the CLI's stdout is
 returned as the result text.
 
+Event loops without asyncio subprocess support (``SelectorEventLoop`` on
+Windows — used e.g. by ``uvicorn --reload``) raise ``NotImplementedError`` from
+:func:`asyncio.create_subprocess_exec`; the runner then transparently falls
+back to a blocking :func:`subprocess.run` in a worker thread.
+
 To swap this default for another backend (Cursor / Copilot / Anthropic API),
 write a new :class:`~app.llm.base.LLMRunner` subclass, register it under a new
 ``("llm_runner", "<name>")`` key, and set ``ACTIVE_LLM_RUNNER=<name>`` — no
@@ -14,6 +19,8 @@ service edits required. See :mod:`app.llm.base` for the full swap recipe.
 from __future__ import annotations
 
 import asyncio
+import shutil
+import subprocess
 
 from app.config import get_settings
 from app.llm.base import LLMRunner, LLMRunnerError, compose_prompt
@@ -43,7 +50,11 @@ class ClaudeCodeRunner(LLMRunner):
             flag (useful for model selection, etc.).
         """
 
-        self._cli_path = cli_path or get_settings().CLAUDE_CLI_PATH
+        configured = cli_path or get_settings().CLAUDE_CLI_PATH
+        # Resolve through PATH (honoring PATHEXT on Windows, where the npm
+        # shim is ``claude.CMD`` and CreateProcess would not find bare
+        # ``claude``). Fall back to the configured value if not resolvable.
+        self._cli_path = shutil.which(configured) or configured
         self._timeout = timeout
         self._extra_args = list(extra_args or [])
 
@@ -64,11 +75,13 @@ class ClaudeCodeRunner(LLMRunner):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
+        except NotImplementedError:
+            # The running event loop does not support asyncio subprocesses
+            # (SelectorEventLoop on Windows, e.g. under ``uvicorn --reload``).
+            # Run the CLI blockingly in a worker thread instead.
+            return await asyncio.to_thread(self._run_blocking, args, prompt)
         except FileNotFoundError as exc:
-            raise LLMRunnerError(
-                f"Claude Code CLI not found at {self._cli_path!r}. "
-                "Set CLAUDE_CLI_PATH to a valid executable."
-            ) from exc
+            raise LLMRunnerError(self._not_found_message()) from exc
         except OSError as exc:  # pragma: no cover - defensive
             raise LLMRunnerError(
                 f"Failed to launch Claude Code CLI {self._cli_path!r}: {exc}"
@@ -93,6 +106,47 @@ class ClaudeCodeRunner(LLMRunner):
             )
 
         return stdout_bytes.decode("utf-8", errors="replace").strip()
+
+    def _run_blocking(self, args: list[str], prompt: str) -> str:
+        """Synchronous fallback used when the loop lacks subprocess support.
+
+        Runs in a worker thread (via :func:`asyncio.to_thread`), so blocking
+        here does not stall the event loop. Same error contract as the async
+        path.
+        """
+
+        try:
+            completed = subprocess.run(
+                args,
+                input=prompt.encode("utf-8"),
+                capture_output=True,
+                timeout=self._timeout,
+            )
+        except FileNotFoundError as exc:
+            raise LLMRunnerError(self._not_found_message()) from exc
+        except subprocess.TimeoutExpired as exc:
+            raise LLMRunnerError(
+                f"Claude Code CLI timed out after {self._timeout:g}s."
+            ) from exc
+        except OSError as exc:  # pragma: no cover - defensive
+            raise LLMRunnerError(
+                f"Failed to launch Claude Code CLI {self._cli_path!r}: {exc}"
+            ) from exc
+
+        if completed.returncode != 0:
+            stderr_text = completed.stderr.decode("utf-8", errors="replace").strip()
+            raise LLMRunnerError(
+                f"Claude Code CLI exited with code {completed.returncode}: "
+                f"{stderr_text or '<no stderr>'}"
+            )
+
+        return completed.stdout.decode("utf-8", errors="replace").strip()
+
+    def _not_found_message(self) -> str:
+        return (
+            f"Claude Code CLI not found at {self._cli_path!r}. "
+            "Set CLAUDE_CLI_PATH to a valid executable."
+        )
 
 
 def _terminate(process: asyncio.subprocess.Process) -> None:

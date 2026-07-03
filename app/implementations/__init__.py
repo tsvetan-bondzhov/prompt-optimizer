@@ -15,7 +15,14 @@ from app.implementations import (  # noqa: F401
     evaluation_steps,
     executor,
     json_evaluation_steps,
+    ollama_executor,
     prepare,
 )
 
-__all__ = ["evaluation_steps", "executor", "json_evaluation_steps", "prepare"]
+__all__ = [
+    "evaluation_steps",
+    "executor",
+    "json_evaluation_steps",
+    "ollama_executor",
+    "prepare",
+]

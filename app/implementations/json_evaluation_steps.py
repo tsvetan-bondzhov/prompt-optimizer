@@ -6,7 +6,7 @@ Two steps for prompts whose output is expected to be JSON:
   validates it against a JSON Schema read from
   ``test_case.evaluation_criteria["json_schema"]``.
 * :class:`JsonExpectedMatchStep` — parses ``result.text`` as JSON and compares
-  it to an expected JSON object read from
+  it to an expected JSON document (object or array) read from
   ``test_case.evaluation_criteria["expected_json"]``. Objects are traversed in
   both directions (unexpected output fields are mismatches), arrays are
   compared element-wise, and a path is ignored only when it is null/missing on
@@ -179,11 +179,12 @@ class JsonSchemaValidationStep(_JsonStepBase):
 
 
 class JsonExpectedMatchStep(_JsonStepBase):
-    """Compare the JSON output to an expected JSON object.
+    """Compare the JSON output to an expected JSON document.
 
-    The expected object is read from
+    The expected document — a JSON object **or** array — is read from
     ``test_case.evaluation_criteria["expected_json"]`` (or legacy
-    ``"expected"``). Objects are traversed key-by-key in **both** directions,
+    ``"expected"``); the output's top-level type must match it. Objects are
+    traversed key-by-key in **both** directions,
     arrays element-wise by index, and scalars compared by equality. Each
     compared path falls into one of three buckets:
 
@@ -203,10 +204,12 @@ class JsonExpectedMatchStep(_JsonStepBase):
 
     name = "json_expected_match"
 
-    def _expected(self, test_case: TestCase) -> Optional[dict[str, Any]]:
+    def _expected(
+        self, test_case: TestCase
+    ) -> Optional[dict[str, Any] | list[Any]]:
         criteria: dict[str, Any] = test_case.evaluation_criteria or {}
         expected = criteria.get("expected_json", criteria.get("expected"))
-        return expected if isinstance(expected, dict) else None
+        return expected if isinstance(expected, (dict, list)) else None
 
     async def evaluate(
         self, result: PromptResult, test_case: TestCase
@@ -217,7 +220,7 @@ class JsonExpectedMatchStep(_JsonStepBase):
                 strengths=["Output produced for the test case"],
                 weaknesses=["No 'expected_json' configured in evaluation_criteria"],
                 reasoning=(
-                    "No expected JSON object found in "
+                    "No expected JSON object or array found in "
                     "test_case.evaluation_criteria, so this step cannot compare "
                     "the output; returning a neutral score."
                 ),
@@ -228,13 +231,17 @@ class JsonExpectedMatchStep(_JsonStepBase):
         parsed, parse_error = self._parse(result)
         if parse_error is not None:
             return self._parse_failure(result, parse_error)
-        if not isinstance(parsed, dict):
+        expected_kind = "object" if isinstance(expected, dict) else "array"
+        if not isinstance(parsed, type(expected)):
             return PromptEvaluation(
                 strengths=["Output is valid JSON"],
-                weaknesses=["Output is not a JSON object, cannot compare fields"],
+                weaknesses=[
+                    f"Output is not a JSON {expected_kind}, cannot compare fields"
+                ],
                 reasoning=(
-                    "Expected-field comparison requires a JSON object at the "
-                    f"top level, got {type(parsed).__name__}."
+                    f"The expected JSON is an {expected_kind}, so the output "
+                    f"must be a JSON {expected_kind} at the top level; got "
+                    f"{type(parsed).__name__}."
                 ),
                 score=1,
                 step_name=self.name,
@@ -248,7 +255,7 @@ class JsonExpectedMatchStep(_JsonStepBase):
         compared = len(matched) + len(mismatched)
         if compared == 0:
             return PromptEvaluation(
-                strengths=["Output is a valid JSON object"],
+                strengths=[f"Output is a valid JSON {expected_kind}"],
                 weaknesses=[
                     "No fields were comparable "
                     "(all null/missing on both sides)"
@@ -267,7 +274,7 @@ class JsonExpectedMatchStep(_JsonStepBase):
 
         strengths = trim(
             [f"Field {path} matches the expected value" for path in matched]
-        ) or ["Output is a valid JSON object"]
+        ) or [f"Output is a valid JSON {expected_kind}"]
         weaknesses = trim(
             [f"Field {message}" for message in mismatched]
         ) or ["All compared fields match the expected values"]

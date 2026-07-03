@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     # --- Claude Code CLI -------------------------------------------------
     CLAUDE_CLI_PATH: str = "claude"
 
+    # --- Ollama (local) ---------------------------------------------------
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_MODEL: str = "mistral"
+    OLLAMA_TIMEOUT_SECONDS: float = 120.0
+
     # --- Optimization / evaluation defaults ------------------------------
     DEFAULT_EXECUTIONS_PER_TEST_CASE: int = 1
     DEFAULT_TARGET_SCORE: float = 9.0
