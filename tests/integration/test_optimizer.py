@@ -17,7 +17,7 @@ from app.models import OptimizationState, RunConfig, TestCase
 from app.services.evaluator import EvaluatorService
 from app.services.optimizer import OptimizerService
 from app.services.summarizer import SummarizerService
-from tests.fakes import FakeGrader, FakeExecutor, FakeImprover, FakeSummarizer
+from tests.fakes import FakeGrader, FakeExecutor, FakeOptimizer, FakeSummarizer
 
 
 async def make_env(db, scores, *, avg_score=None):
@@ -54,7 +54,7 @@ async def make_env(db, scores, *, avg_score=None):
         OptimizationRunRepository(db),
         OptimizationStepRepository(db),
         TestCaseRepository(db),
-        improver_resolver=FakeImprover,
+        optimizer_resolver=FakeOptimizer,
     )
     return optimizer, state
 

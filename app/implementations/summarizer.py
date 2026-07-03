@@ -43,7 +43,7 @@ __all__ = [
 logger = logging.getLogger(__name__)
 
 # Default cap on the number of strengths/weaknesses kept in a summary, sized to
-# fit comfortably inside the improver's context window.
+# fit comfortably inside the optimizer's context window.
 DEFAULT_TOP_K = 3
 
 

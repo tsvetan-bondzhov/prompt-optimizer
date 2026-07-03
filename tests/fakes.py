@@ -8,12 +8,12 @@ from typing import Iterable, Optional
 from app.core.interfaces import (
     Grader,
     PromptExecutor,
-    PromptImprover,
+    PromptOptimizer,
     Summarizer,
 )
 from app.models import (
     EvaluationSummary,
-    ImprovementContext,
+    OptimizationContext,
     Prompt,
     PromptEvaluation,
     PromptResult,
@@ -66,14 +66,14 @@ class FailingGrader(Grader):
         raise RuntimeError("scripted step failure")
 
 
-class FakeImprover(PromptImprover):
+class FakeOptimizer(PromptOptimizer):
     """Returns scripted prompts (default: appends an iteration marker)."""
 
     def __init__(self, prompts: Optional[Iterable[str]] = None) -> None:
         self._prompts = deque(prompts or [])
         self.calls = 0
 
-    async def improve(self, ctx: ImprovementContext) -> Prompt:
+    async def optimize(self, ctx: OptimizationContext) -> Prompt:
         self.calls += 1
         if self._prompts:
             return Prompt(text=self._prompts.popleft())

@@ -12,7 +12,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Default optimizer system prompt. Kept as an easily editable module-level
 # constant per the implementation plan (§8).
-DEFAULT_IMPROVER_SYSTEM_PROMPT = (
+DEFAULT_OPTIMIZER_SYSTEM_PROMPT = (
     "You are an expert prompt engineer. Given a goal, the current prompt, its "
     "measured strengths and weaknesses, the current average score, and the "
     "reasoning behind it, produce an improved prompt that better satisfies the "
@@ -36,7 +36,7 @@ class Settings(BaseSettings):
 
     # --- Active registry implementations ---------------------------------
     ACTIVE_EXECUTOR: str = "default"
-    ACTIVE_IMPROVER: str = "claude_code"
+    ACTIVE_OPTIMIZER: str = "claude_code"
     ACTIVE_SUMMARIZER: str = "default"
     ACTIVE_LLM_RUNNER: str = "claude_code"
 
@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     JSON_EVAL_ALLOW_MARKDOWN: bool = False
 
     # --- Optimizer prompt -------------------------------------------------
-    IMPROVER_SYSTEM_PROMPT: str = DEFAULT_IMPROVER_SYSTEM_PROMPT
+    OPTIMIZER_SYSTEM_PROMPT: str = DEFAULT_OPTIMIZER_SYSTEM_PROMPT
 
     # --- Logging ----------------------------------------------------------
     LOG_LEVEL: str = "INFO"

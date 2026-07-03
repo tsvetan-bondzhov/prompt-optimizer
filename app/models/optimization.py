@@ -2,8 +2,8 @@
 
 Covers the persisted best state (:class:`OptimizationState`), a single loop
 invocation (:class:`OptimizationRun`) with its config and progress, one
-iteration (:class:`OptimizationStep`), and the improver input
-(:class:`ImprovementContext`).
+iteration (:class:`OptimizationStep`), and the optimizer input
+(:class:`OptimizationContext`).
 
 Field names match :mod:`app.db.repositories.states`,
 :mod:`app.db.repositories.runs`, and :mod:`app.db.repositories.steps`.
@@ -115,8 +115,8 @@ class OptimizationStep(BaseModel):
     created_at: datetime = Field(default_factory=utcnow)
 
 
-class ImprovementContext(BaseModel):
-    """Input handed to a :class:`PromptImprover` to propose a better prompt."""
+class OptimizationContext(BaseModel):
+    """Input handed to a :class:`PromptOptimizer` to propose a better prompt."""
 
     model_config = ConfigDict(extra="forbid")
 

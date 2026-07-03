@@ -6,7 +6,7 @@ registry. It is idempotent.
 This module only registers framework-provided defaults (currently the mean
 aggregator). User-supplied / reference implementations — concrete
 ``PromptExecutor``, ``Grader`` + ``prepare_graders()``,
-``PromptImprover``, ``Summarizer`` and ``LLMRunner`` — live under
+``PromptOptimizer``, ``Summarizer`` and ``LLMRunner`` — live under
 ``app/implementations`` and ``app/llm`` (Tasks 06/07/10). When those exist they
 register themselves here (or via import side effects in
 ``app/implementations/__init__.py``).
@@ -60,10 +60,10 @@ def register_builtins() -> None:
     # effects out of the core package.
     import app.implementations.summarizer  # noqa: F401
 
-    # Reference improver (Task 09): importing the module fires its module-level
-    # registrations — the LLM-backed improver under ("improver", "claude_code")
-    # (the default ACTIVE_IMPROVER) and a generic ("improver", "default") alias.
+    # Reference optimizer (Task 09): importing the module fires its module-level
+    # registrations — the LLM-backed optimizer under ("optimizer", "claude_code")
+    # (the default ACTIVE_OPTIMIZER) and a generic ("optimizer", "default") alias.
     # Imported lazily to keep import-time side effects out of the core package.
-    import app.implementations.improver  # noqa: F401
+    import app.implementations.optimizer  # noqa: F401
 
     _done = True

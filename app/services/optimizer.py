@@ -3,16 +3,16 @@
 The :class:`OptimizerService` drives the optimization feedback loop described in
 implementation plan §6.2. Given an :class:`OptimizationState` (the current best
 prompt for a goal) and a :class:`RunConfig`, it iteratively asks a
-:class:`~app.core.interfaces.PromptImprover` for a better prompt, re-evaluates it
+:class:`~app.core.interfaces.PromptOptimizer` for a better prompt, re-evaluates it
 with the :class:`~app.services.evaluator.EvaluatorService`, summarizes the
 results with the :class:`~app.services.summarizer.SummarizerService`, and accepts
 the proposal only when its average score is **strictly greater** than the
 current best.
 
 It mirrors :class:`EvaluatorService`'s design: every collaborator (evaluator,
-summarizer, improver, repositories, progress tracker) is injected so nothing is
-hardcoded and tests can swap in fakes. The improver is resolved through
-:func:`app.core.registry.get_improver` by default.
+summarizer, optimizer, repositories, progress tracker) is injected so nothing is
+hardcoded and tests can swap in fakes. The optimizer is resolved through
+:func:`app.core.registry.get_prompt_optimizer` by default.
 
 Key behaviours (plan §6.2 / §9):
 
@@ -24,7 +24,7 @@ Key behaviours (plan §6.2 / §9):
 * **Full persistence:** every iteration persists an :class:`OptimizationStep`
   (proposed prompt + all report links), accepted or not. The evaluator persists
   all pre-summarization reports linked to the owning optimization run.
-* **Failure handling:** improver/LLM/evaluator failures mark the run ``failed``,
+* **Failure handling:** optimizer/LLM/evaluator failures mark the run ``failed``,
   persist partial results, emit an ``error`` progress event, and re-raise.
 """
 
@@ -35,8 +35,8 @@ from collections.abc import Callable
 from typing import Any, Optional
 
 from app.config import get_settings
-from app.core.registry import get_improver
-from app.core.interfaces import PromptImprover
+from app.core.registry import get_prompt_optimizer
+from app.core.interfaces import PromptOptimizer
 from app.db.repositories.reports import EvaluationReportRepository
 from app.db.repositories.runs import OptimizationRunRepository
 from app.db.repositories.states import OptimizationStateRepository
@@ -44,7 +44,7 @@ from app.db.repositories.steps import OptimizationStepRepository
 from app.db.repositories.test_cases import TestCaseRepository
 from app.models import (
     EvaluationSummary,
-    ImprovementContext,
+    OptimizationContext,
     OptimizationRun,
     OptimizationState,
     OptimizationStep,
@@ -62,9 +62,9 @@ __all__ = ["OptimizerService"]
 
 logger = logging.getLogger(__name__)
 
-# Resolver callable returning the active improver (defaults to the registry
+# Resolver callable returning the active optimizer (defaults to the registry
 # helper, overridable for tests).
-ImproverResolver = Callable[[], PromptImprover]
+OptimizerResolver = Callable[[], PromptOptimizer]
 
 
 class OptimizerService:
@@ -80,7 +80,7 @@ class OptimizerService:
         test_case_repository: TestCaseRepository,
         *,
         report_repository: Optional[EvaluationReportRepository] = None,
-        improver_resolver: ImproverResolver = get_improver,
+        optimizer_resolver: OptimizerResolver = get_prompt_optimizer,
         progress: Optional[ProgressTracker] = None,
     ) -> None:
         """:param evaluator: Evaluates a prompt across test cases (Task 08).
@@ -91,7 +91,7 @@ class OptimizerService:
         :param test_case_repository: Resolves ``state.test_case_ids`` to test cases.
         :param report_repository: Optional reports repo (reports are persisted by
             the evaluator; injected for API completeness / future use).
-        :param improver_resolver: Returns the active :class:`PromptImprover`.
+        :param optimizer_resolver: Returns the active :class:`PromptOptimizer`.
         :param progress: Optional :class:`ProgressTracker` for live events.
         """
 
@@ -102,7 +102,7 @@ class OptimizerService:
         self._steps = step_repository
         self._test_cases = test_case_repository
         self._reports = report_repository
-        self._improver_resolver = improver_resolver
+        self._optimizer_resolver = optimizer_resolver
         self._progress = progress
 
     async def optimize(
@@ -124,7 +124,7 @@ class OptimizerService:
             loop in the background. When ``None`` a fresh run is created.
         :returns: The final (possibly updated) :class:`OptimizationState`.
         :raises ValueError: If the state is not found or has no test cases.
-        :raises Exception: Re-raises improver/evaluator failures after marking the
+        :raises Exception: Re-raises optimizer/evaluator failures after marking the
             run failed and persisting partial results.
         """
 
@@ -296,17 +296,17 @@ class OptimizerService:
         previous_avg = state.avg_score
 
         # 1. Propose an improved prompt from the current context.
-        ctx = ImprovementContext(
+        ctx = OptimizationContext(
             goal=state.goal,
             current_prompt=state.current_prompt,
             strengths=state.strengths,
             weaknesses=state.weaknesses,
             avg_score=state.avg_score,
             reasoning=state.reasoning,
-            system_prompt=get_settings().IMPROVER_SYSTEM_PROMPT,
+            system_prompt=get_settings().OPTIMIZER_SYSTEM_PROMPT,
         )
-        improver = self._improver_resolver()
-        proposed = await improver.improve(ctx)
+        optimizer = self._optimizer_resolver()
+        proposed = await optimizer.optimize(ctx)
 
         # 2. Evaluate it, linking all reports to the owning optimization run.
         eval_result = await self._evaluator.run(

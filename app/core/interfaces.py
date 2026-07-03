@@ -8,7 +8,7 @@ through configuration (see :class:`app.config.Settings`).
   are **user-supplied** (reference examples ship in ``app/implementations``).
   Graders do **not** ship a built-in LLM call — users wire their own
   scoring logic.
-- :class:`PromptImprover` and :class:`Summarizer` use a pluggable
+- :class:`PromptOptimizer` and :class:`Summarizer` use a pluggable
   :class:`LLMRunner` (default = Claude Code headless runner).
 - :class:`Aggregator` collapses per-grader scores for a single evaluation point
   into one number (default = mean).
@@ -21,7 +21,7 @@ from typing import Protocol, runtime_checkable
 
 from app.models import (
     EvaluationSummary,
-    ImprovementContext,
+    OptimizationContext,
     Prompt,
     PromptEvaluation,
     PromptResult,
@@ -32,7 +32,7 @@ __all__ = [
     "PromptExecutor",
     "Grader",
     "PrepareGraders",
-    "PromptImprover",
+    "PromptOptimizer",
     "Summarizer",
     "LLMRunner",
     "Aggregator",
@@ -84,11 +84,11 @@ class PrepareGraders(Protocol):
         ...
 
 
-class PromptImprover(ABC):
+class PromptOptimizer(ABC):
     """Proposes an improved prompt from the current optimization context."""
 
     @abstractmethod
-    async def improve(self, ctx: ImprovementContext) -> Prompt:
+    async def optimize(self, ctx: OptimizationContext) -> Prompt:
         """Return an improved :class:`Prompt` given ``ctx``."""
         raise NotImplementedError
 
@@ -105,7 +105,7 @@ class Summarizer(ABC):
 
 
 class LLMRunner(ABC):
-    """A minimal text-in / text-out LLM interface used by improver/summarizer."""
+    """A minimal text-in / text-out LLM interface used by optimizer/summarizer."""
 
     @abstractmethod
     async def run(self, system_prompt: str, user_prompt: str) -> str:

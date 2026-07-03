@@ -4,7 +4,7 @@ The :class:`SummarizerService` wraps the *active* :class:`Summarizer`
 implementation resolved from the registry and condenses many per-grader
 evaluations into a single :class:`EvaluationSummary` (consolidated strengths,
 weaknesses, reasoning). That summary updates optimizer state and feeds the next
-improvement step (it maps cleanly onto :class:`ImprovementContext`).
+improvement step (it maps cleanly onto :class:`OptimizationContext`).
 
 It mirrors :class:`app.services.evaluator.EvaluatorService`: the concrete
 implementation is injected through a resolver that defaults to the registry

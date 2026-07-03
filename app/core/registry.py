@@ -8,7 +8,7 @@ Services then resolve the *active* implementation by name from
 Categories:
     ``executor``            -> :class:`~app.core.interfaces.PromptExecutor`
     ``grader_prepare``  -> :class:`~app.core.interfaces.PrepareGraders`
-    ``improver``            -> :class:`~app.core.interfaces.PromptImprover`
+    ``optimizer``            -> :class:`~app.core.interfaces.PromptOptimizer`
     ``summarizer``          -> :class:`~app.core.interfaces.Summarizer`
     ``llm_runner``          -> :class:`~app.core.interfaces.LLMRunner`
     ``aggregator``          -> :class:`~app.core.interfaces.Aggregator`
@@ -27,7 +27,7 @@ from app.core.interfaces import (
     Grader,
     LLMRunner,
     PromptExecutor,
-    PromptImprover,
+    PromptOptimizer,
     Summarizer,
     mean_aggregator,
 )
@@ -42,7 +42,7 @@ __all__ = [
     "clear",
     "get_executor",
     "get_graders",
-    "get_improver",
+    "get_prompt_optimizer",
     "get_summarizer",
     "get_llm_runner",
     "get_aggregator",
@@ -54,7 +54,7 @@ Factory = Callable[[], Any]
 CATEGORIES: tuple[str, ...] = (
     "executor",
     "grader_prepare",
-    "improver",
+    "optimizer",
     "summarizer",
     "llm_runner",
     "aggregator",
@@ -161,10 +161,10 @@ def get_graders() -> list[Grader]:
     return steps
 
 
-def get_improver() -> PromptImprover:
-    """Resolve the active :class:`PromptImprover` from settings."""
+def get_prompt_optimizer() -> PromptOptimizer:
+    """Resolve the active :class:`PromptOptimizer` from settings."""
 
-    return resolve("improver", get_settings().ACTIVE_IMPROVER)
+    return resolve("optimizer", get_settings().ACTIVE_OPTIMIZER)
 
 
 def get_summarizer() -> Summarizer:
