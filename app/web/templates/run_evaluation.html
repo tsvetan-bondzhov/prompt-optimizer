@@ -29,6 +29,12 @@
   <label>Executions per test case
     <input type="number" name="executions_per_test_case" min="1" value="1">
   </label>
+  <label class="check">
+    <input type="checkbox" name="update_prompt" value="1">
+    Update the selected prompt with this evaluation's score and summary
+    (no optimization; ignored unless a prompt is selected — if you typed a
+    custom prompt text, it becomes the prompt's current text)
+  </label>
   <div class="actions">
     <button class="btn primary" type="submit">Start evaluation</button>
   </div>

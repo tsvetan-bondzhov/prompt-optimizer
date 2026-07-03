@@ -55,6 +55,13 @@ class EvaluationStartRequest(BaseModel):
     prompt_id: Optional[str] = Field(default=None)
     test_case_ids: list[str] = Field(default_factory=list)
     executions_per_test_case: int = Field(default=1, ge=1)
+    update_prompt: bool = Field(
+        default=False,
+        description=(
+            "Update the stored prompt (requires 'prompt_id') with this "
+            "run's measured score, summary, and evaluated text."
+        ),
+    )
 
 
 class RunStartedResponse(BaseModel):
@@ -119,6 +126,11 @@ async def start_evaluation(
             detail="A prompt is required (either 'prompt' or a 'prompt_id' "
             "whose prompt has a current prompt text).",
         )
+    if payload.update_prompt and payload.prompt_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="'update_prompt' requires a 'prompt_id'.",
+        )
 
     test_cases = await resolve_test_cases(test_case_ids, test_case_repo)
 
@@ -140,6 +152,8 @@ async def start_evaluation(
         test_cases,
         payload.executions_per_test_case,
         prompt_name,
+        payload.prompt_id,
+        payload.update_prompt,
     )
     return RunStartedResponse(run_id=run.id)
 

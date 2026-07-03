@@ -430,6 +430,7 @@ async def run_evaluation_submit(
     prompt_name: Optional[str] = None
     test_case_ids = [str(v) for v in form.getlist("test_case_ids")]
     n = max(1, int(form.get("executions_per_test_case", 1) or 1))
+    update_prompt = bool(form.get("update_prompt")) and bool(prompt_id)
 
     if prompt_id:
         prompt = await prompts.get(prompt_id)
@@ -464,6 +465,8 @@ async def run_evaluation_submit(
         selected,
         n,
         prompt_name,
+        prompt_id or None,
+        update_prompt,
     )
     return RedirectResponse(
         f"/runs/{run.id}", status_code=status.HTTP_303_SEE_OTHER

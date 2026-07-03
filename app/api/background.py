@@ -28,8 +28,8 @@ from app.db.repositories import (
     TestCaseRepository,
 )
 from app.models import PromptText, RunConfig, RunStatus, TestCase
-from app.services.evaluator import EvaluatorService
-from app.services.optimizer import OptimizerService
+from app.services.evaluator import EvaluationRunResult, EvaluatorService
+from app.services.optimizer import OptimizerService, summarizer_runner_name
 from app.services.progress import ProgressTracker
 from app.services.summarizer import SummarizerService
 
@@ -46,12 +46,19 @@ async def execute_evaluation_run(
     test_cases: list[TestCase],
     executions_per_test_case: int,
     prompt_name: str | None = None,
+    prompt_id: str | None = None,
+    update_prompt: bool = False,
 ) -> None:
     """Execute a standalone evaluation for a pre-created (``pending``) run.
 
     The route has already created the ``EvaluationRun`` document; this coroutine
     owns its status transitions from here on (the evaluator itself leaves runs
     it did not create untouched).
+
+    When ``update_prompt`` is true (requires ``prompt_id``), the stored prompt
+    is updated from this run after completion: measured ``avg_score`` plus the
+    summarized strengths/weaknesses/reasoning — and the evaluated text becomes
+    the prompt's ``current_prompt`` when it was overridden in the form.
     """
 
     runs = EvaluationRunRepository(db)
@@ -75,12 +82,46 @@ async def execute_evaluation_run(
                 "metadata": {"report_ids": result.report_ids},
             },
         )
+        if update_prompt and prompt_id is not None:
+            await _apply_evaluation_to_prompt(
+                db, prompt_id, prompt_text, test_cases, result
+            )
     except Exception as exc:  # noqa: BLE001 - background jobs must not raise
         logger.exception("Standalone evaluation run %s failed", run_id)
         await runs.update(
             run_id, {"status": RunStatus.FAILED.value, "error": str(exc)}
         )
         await _emit_error(tracker, run_id, exc)
+
+
+async def _apply_evaluation_to_prompt(
+    db: AsyncIOMotorDatabase,
+    prompt_id: str,
+    prompt_text: str,
+    test_cases: list[TestCase],
+    result: EvaluationRunResult,
+) -> None:
+    """Fold a standalone evaluation's outcome into the stored prompt.
+
+    Mirrors the optimizer's baseline behaviour: the evaluated text becomes the
+    current prompt (a no-op when it was not overridden), and the measured score
+    and summarized strengths/weaknesses/reasoning replace the previous ones.
+    """
+
+    summary = await SummarizerService().summarize(
+        result.points,
+        llm_runner_name=summarizer_runner_name(test_cases),
+    )
+    await PromptRepository(db).update(
+        prompt_id,
+        {
+            "current_prompt": prompt_text,
+            "avg_score": result.avg_score,
+            "strengths": summary.strengths,
+            "weaknesses": summary.weaknesses,
+            "reasoning": summary.reasoning,
+        },
+    )
 
 
 async def execute_optimization_run(

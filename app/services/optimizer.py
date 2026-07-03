@@ -58,7 +58,7 @@ from app.services.evaluator import EvaluatorService
 from app.services.progress import ProgressTracker
 from app.services.summarizer import SummarizerService
 
-__all__ = ["OptimizerService"]
+__all__ = ["OptimizerService", "summarizer_runner_name"]
 
 logger = logging.getLogger(__name__)
 
@@ -279,7 +279,7 @@ class OptimizerService:
         )
         summary = await self._summarizer.summarize(
             baseline.points,
-            llm_runner_name=_summarizer_runner_name(test_cases),
+            llm_runner_name=summarizer_runner_name(test_cases),
         )
         self._apply_summary(prompt, baseline.avg_score, summary)
         await self._persist_prompt(prompt)
@@ -326,7 +326,7 @@ class OptimizerService:
         # 3. Summarize and decide acceptance (strictly greater).
         summary = await self._summarizer.summarize(
             eval_result.points,
-            llm_runner_name=_summarizer_runner_name(test_cases),
+            llm_runner_name=summarizer_runner_name(test_cases),
         )
         new_avg = eval_result.avg_score
         accepted = previous_avg is not None and new_avg > previous_avg
@@ -398,7 +398,7 @@ class OptimizerService:
             logger.exception("Progress publish failed for run %s", run_id)
 
 
-def _summarizer_runner_name(test_cases: list[TestCase]) -> Optional[str]:
+def summarizer_runner_name(test_cases: list[TestCase]) -> Optional[str]:
     """The LLM runner used to summarize a run's results.
 
     Summarization spans all test cases of the run, so the first test case's
