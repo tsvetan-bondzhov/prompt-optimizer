@@ -2,7 +2,7 @@
 
 The :class:`EvaluatorService` runs a single prompt against a set of test cases,
 ``executions_per_test_case`` times each, applies the ordered user-supplied
-evaluation steps to every produced result, aggregates the per-step scores into a
+graders to every produced result, aggregates the per-grader scores into a
 single point score, and persists one :class:`EvaluationReport` per evaluation
 point (linked to an owning :class:`EvaluationRun`).
 
@@ -10,7 +10,7 @@ It is fully decoupled from the optimizer: it can be called standalone (the run
 it creates is itself a viewable evaluation run) or driven by the optimization
 loop (which supplies its own ``run_id``).
 
-Implementations (executor, evaluation steps, aggregator) are resolved through
+Implementations (executor, graders, aggregator) are resolved through
 :mod:`app.core.registry`; nothing is hardcoded. The optional ``progress``
 callback is a minimal seam for the real ``ProgressTracker`` built in Task 11.
 """
@@ -26,12 +26,12 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.interfaces import (
     Aggregator,
-    EvaluationStep,
+    Grader,
     PromptExecutor,
 )
 from app.core.registry import (
     get_aggregator,
-    get_evaluation_steps,
+    get_graders,
     get_executor,
 )
 from app.db.repositories.reports import (
@@ -59,7 +59,7 @@ ProgressHook = Callable[[dict[str, Any]], Optional[Awaitable[None]]]
 
 # Resolver callables (default to the registry helpers, overridable for tests).
 ExecutorResolver = Callable[[], PromptExecutor]
-StepsResolver = Callable[[], list[EvaluationStep]]
+GradersResolver = Callable[[], list[Grader]]
 AggregatorResolver = Callable[[], Aggregator]
 
 
@@ -90,20 +90,20 @@ class EvaluatorService:
         run_repository: EvaluationRunRepository,
         *,
         executor_resolver: ExecutorResolver = get_executor,
-        steps_resolver: StepsResolver = get_evaluation_steps,
+        graders_resolver: GradersResolver = get_graders,
         aggregator_resolver: AggregatorResolver = get_aggregator,
     ) -> None:
         """:param report_repository: Persists one report per evaluation point.
         :param run_repository: Persists/updates the grouping evaluation run.
         :param executor_resolver: Returns the active :class:`PromptExecutor`.
-        :param steps_resolver: Returns the ordered evaluation steps to run.
+        :param graders_resolver: Returns the ordered graders to run.
         :param aggregator_resolver: Returns the per-point score aggregator.
         """
 
         self._reports = report_repository
         self._runs = run_repository
         self._executor_resolver = executor_resolver
-        self._steps_resolver = steps_resolver
+        self._steps_resolver = graders_resolver
         self._aggregator_resolver = aggregator_resolver
 
     async def run(
@@ -117,7 +117,7 @@ class EvaluatorService:
         """Evaluate ``prompt`` over ``test_cases`` × ``executions_per_test_case``.
 
         For every ``(test_case, execution_index)`` pair the active executor runs
-        the prompt, the ordered evaluation steps score the result, the per-step
+        the prompt, the ordered graders score the result, the per-grader
         scores are aggregated into a single point score, and an
         :class:`EvaluationReport` is persisted (linked to the owning run).
 
@@ -248,7 +248,7 @@ class EvaluatorService:
         test_case: TestCase,
         execution_index: int,
         executor: PromptExecutor,
-        steps: list[EvaluationStep],
+        steps: list[Grader],
         aggregator: Aggregator,
         run_id: Optional[str],
     ) -> tuple[EvaluationPoint, str, Optional[str]]:
@@ -262,8 +262,8 @@ class EvaluatorService:
         error: Optional[str] = None
         try:
             result = await executor.execute(prompt, test_case)
-            step_evals = await self._run_steps(steps, result, test_case)
-            point_score = float(aggregator(step_evals)) if step_evals else 0.0
+            grader_evals = await self._run_steps(steps, result, test_case)
+            point_score = float(aggregator(grader_evals)) if grader_evals else 0.0
             # Aggregated point score must satisfy EvaluationPoint's [1, 10] bound.
             aggregated_score = _clamp_score(point_score)
             result_text = result.text
@@ -274,11 +274,11 @@ class EvaluatorService:
                 execution_index,
             )
             error = str(exc)
-            step_evals = []
+            grader_evals = []
             aggregated_score = 1.0
             result_text = ""
 
-        merged = _merge_evaluations(step_evals, error=error)
+        merged = _merge_evaluations(grader_evals, error=error)
 
         report = EvaluationReport(
             run_id=run_id,
@@ -289,7 +289,7 @@ class EvaluatorService:
             strengths=merged["strengths"],
             weaknesses=merged["weaknesses"],
             reasoning=merged["reasoning"],
-            step_evaluations=step_evals,
+            grader_evaluations=grader_evals,
         )
         stored = await self._reports.create(report.model_dump())
         report_id = stored.get("id", report.id)
@@ -298,14 +298,14 @@ class EvaluatorService:
             test_case_id=test_case.id,
             execution_index=execution_index,
             prompt_result=result_text,
-            step_evaluations=step_evals,
+            grader_evaluations=grader_evals,
             aggregated_score=aggregated_score,
         )
         return point, report_id, error
 
     async def _run_steps(
         self,
-        steps: list[EvaluationStep],
+        steps: list[Grader],
         result: PromptResult,
         test_case: TestCase,
     ) -> list[PromptEvaluation]:
@@ -313,10 +313,10 @@ class EvaluatorService:
 
         evaluations: list[PromptEvaluation] = []
         for step in steps:
-            evaluation = await step.evaluate(result, test_case)
-            if evaluation.step_name is None:
+            evaluation = await step.grade(result, test_case)
+            if evaluation.grader_name is None:
                 evaluation = evaluation.model_copy(
-                    update={"step_name": getattr(step, "name", None)}
+                    update={"grader_name": getattr(step, "name", None)}
                 )
             evaluations.append(evaluation)
         return evaluations
@@ -344,9 +344,9 @@ def _clamp_score(value: float) -> float:
 
 
 def _merge_evaluations(
-    step_evals: list[PromptEvaluation], *, error: Optional[str] = None
+    grader_evals: list[PromptEvaluation], *, error: Optional[str] = None
 ) -> dict[str, Any]:
-    """Merge per-step strengths/weaknesses/reasoning for the persisted report.
+    """Merge per-grader strengths/weaknesses/reasoning for the persisted report.
 
     Strengths and weaknesses are de-duplicated while preserving order; reasoning
     is a readable concatenation prefixed by each step's name. A captured
@@ -358,8 +358,8 @@ def _merge_evaluations(
     weaknesses: list[str] = []
     reasoning_parts: list[str] = []
 
-    for evaluation in step_evals:
-        label = evaluation.step_name or "step"
+    for evaluation in grader_evals:
+        label = evaluation.grader_name or "step"
         for item in evaluation.strengths:
             if item not in strengths:
                 strengths.append(item)

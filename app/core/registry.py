@@ -7,7 +7,7 @@ Services then resolve the *active* implementation by name from
 
 Categories:
     ``executor``            -> :class:`~app.core.interfaces.PromptExecutor`
-    ``evaluation_prepare``  -> :class:`~app.core.interfaces.PrepareEvaluation`
+    ``grader_prepare``  -> :class:`~app.core.interfaces.PrepareGraders`
     ``improver``            -> :class:`~app.core.interfaces.PromptImprover`
     ``summarizer``          -> :class:`~app.core.interfaces.Summarizer`
     ``llm_runner``          -> :class:`~app.core.interfaces.LLMRunner`
@@ -24,7 +24,7 @@ from typing import Any, Callable
 from app.config import get_settings
 from app.core.interfaces import (
     Aggregator,
-    EvaluationStep,
+    Grader,
     LLMRunner,
     PromptExecutor,
     PromptImprover,
@@ -41,7 +41,7 @@ __all__ = [
     "available",
     "clear",
     "get_executor",
-    "get_evaluation_steps",
+    "get_graders",
     "get_improver",
     "get_summarizer",
     "get_llm_runner",
@@ -53,7 +53,7 @@ Factory = Callable[[], Any]
 
 CATEGORIES: tuple[str, ...] = (
     "executor",
-    "evaluation_prepare",
+    "grader_prepare",
     "improver",
     "summarizer",
     "llm_runner",
@@ -148,16 +148,16 @@ def get_executor() -> PromptExecutor:
     return resolve("executor", get_settings().ACTIVE_EXECUTOR)
 
 
-def get_evaluation_steps() -> list[EvaluationStep]:
-    """Call the active ``prepare_evaluation()`` factory and return its steps.
+def get_graders() -> list[Grader]:
+    """Call the active ``prepare_graders()`` factory and return its steps.
 
     The active prepare key reuses ``ACTIVE_EXECUTOR`` since the executor and the
-    evaluation steps form a matched user-supplied pair.
+    graders form a matched user-supplied pair.
     """
 
-    # The registered factory IS ``prepare_evaluation``; resolving it invokes the
-    # factory, which returns the ordered list of EvaluationStep instances.
-    steps = resolve("evaluation_prepare", get_settings().ACTIVE_EXECUTOR)
+    # The registered factory IS ``prepare_graders``; resolving it invokes the
+    # factory, which returns the ordered list of Grader instances.
+    steps = resolve("grader_prepare", get_settings().ACTIVE_EXECUTOR)
     return steps
 
 

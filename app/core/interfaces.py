@@ -4,13 +4,13 @@ These abstract base classes define the pluggable seams of the framework. Concret
 implementations are registered by name in :mod:`app.core.registry` and selected
 through configuration (see :class:`app.config.Settings`).
 
-- :class:`PromptExecutor` and :class:`EvaluationStep` / :func:`prepare_evaluation`
+- :class:`PromptExecutor` and :class:`Grader` / :func:`prepare_graders`
   are **user-supplied** (reference examples ship in ``app/implementations``).
-  Evaluation steps do **not** ship a built-in LLM call — users wire their own
+  Graders do **not** ship a built-in LLM call — users wire their own
   scoring logic.
 - :class:`PromptImprover` and :class:`Summarizer` use a pluggable
   :class:`LLMRunner` (default = Claude Code headless runner).
-- :class:`Aggregator` collapses per-step scores for a single evaluation point
+- :class:`Aggregator` collapses per-grader scores for a single evaluation point
   into one number (default = mean).
 """
 
@@ -30,8 +30,8 @@ from app.models import (
 
 __all__ = [
     "PromptExecutor",
-    "EvaluationStep",
-    "PrepareEvaluation",
+    "Grader",
+    "PrepareGraders",
     "PromptImprover",
     "Summarizer",
     "LLMRunner",
@@ -53,7 +53,7 @@ class PromptExecutor(ABC):
         raise NotImplementedError
 
 
-class EvaluationStep(ABC):
+class Grader(ABC):
     """Scores a single :class:`PromptResult` and returns a structured evaluation.
 
     User-supplied. A step ships no built-in LLM call — the scoring logic is
@@ -64,7 +64,7 @@ class EvaluationStep(ABC):
     name: str
 
     @abstractmethod
-    async def evaluate(
+    async def grade(
         self, result: PromptResult, test_case: TestCase
     ) -> PromptEvaluation:
         """Evaluate ``result`` for ``test_case`` and return a structured score."""
@@ -72,15 +72,15 @@ class EvaluationStep(ABC):
 
 
 @runtime_checkable
-class PrepareEvaluation(Protocol):
-    """Callable returning the ordered list of evaluation steps to run.
+class PrepareGraders(Protocol):
+    """Callable returning the ordered list of graders to run.
 
     User code implements this factory; the registry stores and resolves it under
-    the ``evaluation_prepare`` category.
+    the ``grader_prepare`` category.
     """
 
-    def __call__(self) -> list[EvaluationStep]:
-        """Return ordered, concrete :class:`EvaluationStep` instances."""
+    def __call__(self) -> list[Grader]:
+        """Return ordered, concrete :class:`Grader` instances."""
         ...
 
 
@@ -94,7 +94,7 @@ class PromptImprover(ABC):
 
 
 class Summarizer(ABC):
-    """Condenses many per-step evaluations into a single summary."""
+    """Condenses many per-grader evaluations into a single summary."""
 
     @abstractmethod
     async def summarize(
@@ -115,19 +115,19 @@ class LLMRunner(ABC):
 
 @runtime_checkable
 class Aggregator(Protocol):
-    """Collapses a single evaluation point's per-step scores into one number."""
+    """Collapses a single evaluation point's per-grader scores into one number."""
 
-    def __call__(self, step_evals: list[PromptEvaluation]) -> float:
-        """Aggregate ``step_evals`` into a single score."""
+    def __call__(self, grader_evals: list[PromptEvaluation]) -> float:
+        """Aggregate ``grader_evals`` into a single score."""
         ...
 
 
-def mean_aggregator(step_evals: list[PromptEvaluation]) -> float:
-    """Default aggregation strategy: the mean of the per-step scores.
+def mean_aggregator(grader_evals: list[PromptEvaluation]) -> float:
+    """Default aggregation strategy: the mean of the per-grader scores.
 
     Returns ``0.0`` for an empty list (no steps produced a score).
     """
 
-    if not step_evals:
+    if not grader_evals:
         return 0.0
-    return sum(e.score for e in step_evals) / len(step_evals)
+    return sum(e.score for e in grader_evals) / len(grader_evals)

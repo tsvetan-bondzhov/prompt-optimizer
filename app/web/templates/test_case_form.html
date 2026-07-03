@@ -10,7 +10,7 @@
   <label>Data (JSON object — inputs handed to the executor)
     <textarea name="data" rows="8">{{ test_case.data|tojson_pretty if test_case else '{}' }}</textarea>
   </label>
-  <label>Evaluation criteria (JSON object — consumed by your evaluation steps)
+  <label>Evaluation criteria (JSON object — consumed by your graders)
     <textarea name="evaluation_criteria" rows="8">{{ test_case.evaluation_criteria|tojson_pretty if test_case else '{}' }}</textarea>
   </label>
   <div class="actions">

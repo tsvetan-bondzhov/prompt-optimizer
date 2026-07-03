@@ -1,15 +1,15 @@
-"""Reference :class:`EvaluationStep` implementations (Task 07).
+"""Reference :class:`Grader` implementations (Task 07).
 
 These are **copy-paste templates** for the user-supplied scoring logic. Per the
-design decision, evaluation steps ship **no built-in LLM call** — each step
+design decision, graders ship **no built-in LLM call** — each step
 derives a structured :class:`PromptEvaluation` from ``result.text`` and
 ``test_case.evaluation_criteria`` using deterministic/heuristic logic.
 
 Two reference steps are provided:
 
-* :class:`KeywordCoverageStep` — scores how many expected keywords (read from
+* :class:`KeywordCoverageGrader` — scores how many expected keywords (read from
   ``test_case.evaluation_criteria``) appear in the output.
-* :class:`ResponseQualityStep` — a content-agnostic heuristic on the shape of
+* :class:`ResponseQualityGrader` — a content-agnostic heuristic on the shape of
   the output (non-empty, length within an optional band).
 
 Replace the marked ``# >>> USER`` regions with your own scoring (an LLM-judge
@@ -19,19 +19,19 @@ step MUST return a valid :class:`PromptEvaluation`:
 * ``score``: an integer in ``[1, 10]``
 * ``strengths`` / ``weaknesses``: 1–3 non-empty items each
 * ``reasoning``: a non-empty string
-* ``step_name``: set to the step's ``name`` for traceability
+* ``grader_name``: set to the step's ``name`` for traceability
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from app.core.interfaces import EvaluationStep
+from app.core.interfaces import Grader
 from app.models import PromptEvaluation, PromptResult, TestCase
 
 __all__ = [
-    "KeywordCoverageStep",
-    "ResponseQualityStep",
+    "KeywordCoverageGrader",
+    "ResponseQualityGrader",
     "clamp_score",
     "trim",
 ]
@@ -50,7 +50,7 @@ def trim(items: list[str], limit: int = 3) -> list[str]:
     return cleaned[:limit]
 
 
-class KeywordCoverageStep(EvaluationStep):
+class KeywordCoverageGrader(Grader):
     """Score the fraction of expected keywords present in the output.
 
     Expected keywords are read from ``test_case.evaluation_criteria`` under the
@@ -68,7 +68,7 @@ class KeywordCoverageStep(EvaluationStep):
             raw = [raw]
         return [str(k).strip() for k in raw if str(k).strip()]
 
-    async def evaluate(
+    async def grade(
         self, result: PromptResult, test_case: TestCase
     ) -> PromptEvaluation:
         """Derive a keyword-coverage evaluation from ``result`` and ``test_case``."""
@@ -86,7 +86,7 @@ class KeywordCoverageStep(EvaluationStep):
                     "step cannot measure coverage; returning a neutral score."
                 ),
                 score=5,
-                step_name=self.name,
+                grader_name=self.name,
             )
 
         present = [k for k in keywords if k.lower() in text_lower]
@@ -111,11 +111,11 @@ class KeywordCoverageStep(EvaluationStep):
             weaknesses=weaknesses,
             reasoning=reasoning,
             score=score,
-            step_name=self.name,
+            grader_name=self.name,
         )
 
 
-class ResponseQualityStep(EvaluationStep):
+class ResponseQualityGrader(Grader):
     """Content-agnostic heuristic on the shape of the output.
 
     Rewards a non-empty response and (optionally) one whose length falls within
@@ -127,7 +127,7 @@ class ResponseQualityStep(EvaluationStep):
 
     name = "response_quality"
 
-    async def evaluate(
+    async def grade(
         self, result: PromptResult, test_case: TestCase
     ) -> PromptEvaluation:
         """Derive a shape/quality evaluation from ``result`` and ``test_case``."""
@@ -184,5 +184,5 @@ class ResponseQualityStep(EvaluationStep):
             weaknesses=weaknesses,
             reasoning=reasoning,
             score=clamp_score(score),
-            step_name=self.name,
+            grader_name=self.name,
         )

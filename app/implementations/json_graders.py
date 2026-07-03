@@ -1,21 +1,21 @@
-"""JSON-oriented :class:`EvaluationStep` implementations.
+"""JSON-oriented :class:`Grader` implementations.
 
 Two steps for prompts whose output is expected to be JSON:
 
-* :class:`JsonSchemaValidationStep` — parses ``result.text`` as JSON and
+* :class:`JsonSchemaValidationGrader` — parses ``result.text`` as JSON and
   validates it against a JSON Schema read from
   ``test_case.evaluation_criteria["json_schema"]``.
-* :class:`JsonExpectedMatchStep` — parses ``result.text`` as JSON and compares
+* :class:`JsonExpectedMatchGrader` — parses ``result.text`` as JSON and compares
   it to an expected JSON document (object or array) read from
   ``test_case.evaluation_criteria["expected_json"]``. Objects are traversed in
   both directions (unexpected output fields are mismatches), arrays are
   compared element-wise, and a path is ignored only when it is null/missing on
   both sides. The score is the percentage of compared fields that matched.
 
-Use them by returning instances from your ``prepare_evaluation()`` factory::
+Use them by returning instances from your ``prepare_graders()`` factory::
 
-    def prepare_evaluation() -> list[EvaluationStep]:
-        return [JsonSchemaValidationStep(), JsonExpectedMatchStep()]
+    def prepare_graders() -> list[Grader]:
+        return [JsonSchemaValidationGrader(), JsonExpectedMatchGrader()]
 
 Markdown code fences: by default the output must be **pure JSON** — a fenced
 block (```json ... ```) fails parsing and scores ``1``. Set the
@@ -33,11 +33,11 @@ from typing import Any, Optional
 from jsonschema import Draft202012Validator
 
 from app.config import get_settings
-from app.core.interfaces import EvaluationStep
-from app.implementations.evaluation_steps import clamp_score, trim
+from app.core.interfaces import Grader
+from app.implementations.graders import clamp_score, trim
 from app.models import PromptEvaluation, PromptResult, TestCase
 
-__all__ = ["JsonSchemaValidationStep", "JsonExpectedMatchStep"]
+__all__ = ["JsonSchemaValidationGrader", "JsonExpectedMatchGrader"]
 
 _CODE_FENCE = re.compile(r"^```[a-zA-Z0-9_-]*\s*\n(.*)\n```\s*$", re.DOTALL)
 
@@ -67,7 +67,7 @@ def parse_json_result(
         return None, str(exc)
 
 
-class _JsonStepBase(EvaluationStep):
+class _JsonGraderBase(Grader):
     """Shared fence-tolerance resolution for the JSON steps."""
 
     def __init__(self, *, allow_markdown_fence: Optional[bool] = None) -> None:
@@ -106,11 +106,11 @@ class _JsonStepBase(EvaluationStep):
             weaknesses=[weakness],
             reasoning=reasoning,
             score=1,
-            step_name=self.name,
+            grader_name=self.name,
         )
 
 
-class JsonSchemaValidationStep(_JsonStepBase):
+class JsonSchemaValidationGrader(_JsonGraderBase):
     """Validate the JSON output against a schema from the evaluation criteria.
 
     The schema is read from ``test_case.evaluation_criteria["json_schema"]``
@@ -128,7 +128,7 @@ class JsonSchemaValidationStep(_JsonStepBase):
         schema = criteria.get("json_schema", criteria.get("schema"))
         return schema if isinstance(schema, dict) else None
 
-    async def evaluate(
+    async def grade(
         self, result: PromptResult, test_case: TestCase
     ) -> PromptEvaluation:
         schema = self._schema(test_case)
@@ -142,7 +142,7 @@ class JsonSchemaValidationStep(_JsonStepBase):
                     "score."
                 ),
                 score=5,
-                step_name=self.name,
+                grader_name=self.name,
             )
 
         parsed, parse_error = self._parse(result)
@@ -159,7 +159,7 @@ class JsonSchemaValidationStep(_JsonStepBase):
                 reasoning="Parsed the output as JSON and validated it against "
                 "the configured schema: no violations.",
                 score=10,
-                step_name=self.name,
+                grader_name=self.name,
             )
 
         weaknesses = trim(
@@ -174,11 +174,11 @@ class JsonSchemaValidationStep(_JsonStepBase):
                 f"{len(errors)} violation(s); scored 10 minus 3 per violation."
             ),
             score=score,
-            step_name=self.name,
+            grader_name=self.name,
         )
 
 
-class JsonExpectedMatchStep(_JsonStepBase):
+class JsonExpectedMatchGrader(_JsonGraderBase):
     """Compare the JSON output to an expected JSON document.
 
     The expected document — a JSON object **or** array — is read from
@@ -211,7 +211,7 @@ class JsonExpectedMatchStep(_JsonStepBase):
         expected = criteria.get("expected_json", criteria.get("expected"))
         return expected if isinstance(expected, (dict, list)) else None
 
-    async def evaluate(
+    async def grade(
         self, result: PromptResult, test_case: TestCase
     ) -> PromptEvaluation:
         expected = self._expected(test_case)
@@ -225,7 +225,7 @@ class JsonExpectedMatchStep(_JsonStepBase):
                     "the output; returning a neutral score."
                 ),
                 score=5,
-                step_name=self.name,
+                grader_name=self.name,
             )
 
         parsed, parse_error = self._parse(result)
@@ -244,7 +244,7 @@ class JsonExpectedMatchStep(_JsonStepBase):
                     f"{type(parsed).__name__}."
                 ),
                 score=1,
-                step_name=self.name,
+                grader_name=self.name,
             )
 
         matched: list[str] = []
@@ -266,7 +266,7 @@ class JsonExpectedMatchStep(_JsonStepBase):
                     "verified — neutral score."
                 ),
                 score=5,
-                step_name=self.name,
+                grader_name=self.name,
             )
 
         ratio = len(matched) / compared
@@ -290,7 +290,7 @@ class JsonExpectedMatchStep(_JsonStepBase):
             weaknesses=weaknesses,
             reasoning=reasoning,
             score=score,
-            step_name=self.name,
+            grader_name=self.name,
         )
 
     def _compare(

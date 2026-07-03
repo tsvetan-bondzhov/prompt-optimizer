@@ -1,6 +1,6 @@
 """Evaluation models.
 
-Covers the output of individual evaluation steps (:class:`PromptEvaluation`),
+Covers the output of individual graders (:class:`PromptEvaluation`),
 the in-memory aggregation of a single evaluation point
 (:class:`EvaluationPoint`), the persisted point (:class:`EvaluationReport`), the
 grouping run (:class:`EvaluationRun`), and the merged summary
@@ -20,7 +20,7 @@ from app.models.common import new_id, utcnow
 
 
 class PromptEvaluation(BaseModel):
-    """Structured result of a single evaluation step.
+    """Structured result of a single grader.
 
     Constraints (plan §5):
       - ``score`` is an integer in ``[1, 10]``.
@@ -34,8 +34,8 @@ class PromptEvaluation(BaseModel):
     weaknesses: list[str] = Field(..., min_length=1, max_length=3)
     reasoning: str = Field(..., min_length=1)
     score: int = Field(..., ge=1, le=10)
-    step_name: str | None = Field(
-        default=None, description="Name of the evaluation step that produced this."
+    grader_name: str | None = Field(
+        default=None, description="Name of the grader that produced this."
     )
 
     @field_validator("strengths", "weaknesses")
@@ -57,7 +57,7 @@ class PromptEvaluation(BaseModel):
 class EvaluationPoint(BaseModel):
     """One ``(test_case × execution_index)`` evaluation, in memory.
 
-    Holds the executed result, the per-step evaluations, and the aggregated
+    Holds the executed result, the per-grader evaluations, and the aggregated
     score for the point (default aggregation: mean of step scores).
     """
 
@@ -66,7 +66,7 @@ class EvaluationPoint(BaseModel):
     test_case_id: str
     execution_index: int = Field(..., ge=0)
     prompt_result: str = Field(..., description="The execution output text.")
-    step_evaluations: list[PromptEvaluation] = Field(default_factory=list)
+    grader_evaluations: list[PromptEvaluation] = Field(default_factory=list)
     aggregated_score: float = Field(..., ge=1, le=10)
 
 
@@ -97,7 +97,7 @@ class EvaluationReport(BaseModel):
     strengths: list[str] = Field(default_factory=list)
     weaknesses: list[str] = Field(default_factory=list)
     reasoning: str = Field(default="")
-    step_evaluations: list[PromptEvaluation] = Field(default_factory=list)
+    grader_evaluations: list[PromptEvaluation] = Field(default_factory=list)
 
 
 class EvaluationRun(BaseModel):

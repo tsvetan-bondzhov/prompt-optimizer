@@ -19,7 +19,7 @@ from app.core.bootstrap import register_builtins
 from app.core.registry import register
 from app.llm.fake import FakeLLMRunner
 from tests.fakes import (
-    FakeEvaluationStep,
+    FakeGrader,
     FakeExecutor,
     FakeImprover,
     FakeSummarizer,
@@ -45,9 +45,9 @@ def registered_fakes():
     register_builtins()
     register("executor", "default", FakeExecutor)
     register(
-        "evaluation_prepare",
+        "grader_prepare",
         "default",
-        lambda: [FakeEvaluationStep(scores=(8,))],
+        lambda: [FakeGrader(scores=(8,))],
     )
     register("improver", "claude_code", FakeImprover)
     register("summarizer", "default", FakeSummarizer)

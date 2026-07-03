@@ -11,7 +11,7 @@ from app.db.repositories import (
 )
 from app.models import Prompt, TestCase
 from app.services.evaluator import EvaluatorService
-from tests.fakes import FailingEvaluationStep, FakeEvaluationStep, FakeExecutor
+from tests.fakes import FailingGrader, FakeGrader, FakeExecutor
 
 
 def make_evaluator(db, steps) -> EvaluatorService:
@@ -19,7 +19,7 @@ def make_evaluator(db, steps) -> EvaluatorService:
         EvaluationReportRepository(db),
         EvaluationRunRepository(db),
         executor_resolver=FakeExecutor,
-        steps_resolver=lambda: steps,
+        graders_resolver=lambda: steps,
         aggregator_resolver=lambda: mean_aggregator,
     )
 
@@ -29,7 +29,7 @@ def make_test_cases(n: int) -> list[TestCase]:
 
 
 async def test_produces_exactly_cases_times_n_reports(db):
-    evaluator = make_evaluator(db, [FakeEvaluationStep(scores=(8,))])
+    evaluator = make_evaluator(db, [FakeGrader(scores=(8,))])
     result = await evaluator.run(Prompt(text="p"), make_test_cases(3), 2)
 
     assert len(result.points) == 6
@@ -39,22 +39,22 @@ async def test_produces_exactly_cases_times_n_reports(db):
 
 async def test_avg_score_is_mean_of_points(db):
     # Two test cases × 1 execution; the shared step yields 4 then 8.
-    step = FakeEvaluationStep(scores=(4, 8))
+    step = FakeGrader(scores=(4, 8))
     evaluator = make_evaluator(db, [step])
     result = await evaluator.run(Prompt(text="p"), make_test_cases(2), 1)
     assert result.avg_score == pytest.approx(6.0)
 
 
 async def test_multiple_steps_aggregate_per_point(db):
-    steps = [FakeEvaluationStep("a", scores=(4,)), FakeEvaluationStep("b", scores=(8,))]
+    steps = [FakeGrader("a", scores=(4,)), FakeGrader("b", scores=(8,))]
     evaluator = make_evaluator(db, steps)
     result = await evaluator.run(Prompt(text="p"), make_test_cases(1), 1)
     assert result.points[0].aggregated_score == pytest.approx(6.0)
-    assert len(result.points[0].step_evaluations) == 2
+    assert len(result.points[0].grader_evaluations) == 2
 
 
 async def test_standalone_run_lifecycle_persisted(db):
-    evaluator = make_evaluator(db, [FakeEvaluationStep(scores=(9,))])
+    evaluator = make_evaluator(db, [FakeGrader(scores=(9,))])
     result = await evaluator.run(Prompt(text="p"), make_test_cases(1), 1)
 
     run_doc = await EvaluationRunRepository(db).get(result.run_id)
@@ -64,7 +64,7 @@ async def test_standalone_run_lifecycle_persisted(db):
 
 
 async def test_rejects_empty_test_cases_and_bad_n(db):
-    evaluator = make_evaluator(db, [FakeEvaluationStep()])
+    evaluator = make_evaluator(db, [FakeGrader()])
     with pytest.raises(ValueError):
         await evaluator.run(Prompt(text="p"), [], 1)
     with pytest.raises(ValueError):
@@ -72,7 +72,7 @@ async def test_rejects_empty_test_cases_and_bad_n(db):
 
 
 async def test_failing_step_isolated_as_failed_report(db):
-    evaluator = make_evaluator(db, [FailingEvaluationStep()])
+    evaluator = make_evaluator(db, [FailingGrader()])
     result = await evaluator.run(Prompt(text="p"), make_test_cases(1), 1)
 
     assert result.points[0].aggregated_score == 1.0
@@ -82,7 +82,7 @@ async def test_failing_step_isolated_as_failed_report(db):
 
 async def test_progress_hook_receives_events(db):
     events: list[dict] = []
-    evaluator = make_evaluator(db, [FakeEvaluationStep(scores=(7,))])
+    evaluator = make_evaluator(db, [FakeGrader(scores=(7,))])
     await evaluator.run(
         Prompt(text="p"), make_test_cases(2), 1, progress=events.append
     )

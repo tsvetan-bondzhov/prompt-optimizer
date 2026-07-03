@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import json
 
-from app.implementations.json_evaluation_steps import (
-    JsonExpectedMatchStep,
-    JsonSchemaValidationStep,
+from app.implementations.json_graders import (
+    JsonExpectedMatchGrader,
+    JsonSchemaValidationGrader,
     parse_json_result,
 )
 from app.models import PromptResult, TestCase
@@ -57,8 +57,8 @@ def test_parse_json_unwraps_fence_when_allowed():
 
 
 async def test_fenced_output_scores_1_by_default():
-    step = JsonSchemaValidationStep()
-    evaluation = await step.evaluate(
+    step = JsonSchemaValidationGrader()
+    evaluation = await step.grade(
         PromptResult(text=FENCED), make_case({"json_schema": SCHEMA})
     )
     assert evaluation.score == 1
@@ -66,8 +66,8 @@ async def test_fenced_output_scores_1_by_default():
 
 
 async def test_fenced_output_accepted_when_enabled():
-    step = JsonSchemaValidationStep(allow_markdown_fence=True)
-    evaluation = await step.evaluate(
+    step = JsonSchemaValidationGrader(allow_markdown_fence=True)
+    evaluation = await step.grade(
         PromptResult(text=FENCED), make_case({"json_schema": SCHEMA})
     )
     assert evaluation.score == 10
@@ -79,7 +79,7 @@ async def test_fence_setting_from_environment(monkeypatch):
     monkeypatch.setenv("JSON_EVAL_ALLOW_MARKDOWN", "true")
     get_settings.cache_clear()
     try:
-        evaluation = await JsonSchemaValidationStep().evaluate(
+        evaluation = await JsonSchemaValidationGrader().grade(
             PromptResult(text=FENCED), make_case({"json_schema": SCHEMA})
         )
         assert evaluation.score == 10
@@ -87,22 +87,22 @@ async def test_fence_setting_from_environment(monkeypatch):
         get_settings.cache_clear()
 
 
-# -- JsonSchemaValidationStep -------------------------------------------------
+# -- JsonSchemaValidationGrader -------------------------------------------------
 
 
 async def test_schema_valid_output_scores_10():
-    step = JsonSchemaValidationStep()
-    evaluation = await step.evaluate(
+    step = JsonSchemaValidationGrader()
+    evaluation = await step.grade(
         result_of({"name": "Ada", "age": 36}), make_case({"json_schema": SCHEMA})
     )
     assert evaluation.score == 10
-    assert evaluation.step_name == "json_schema"
+    assert evaluation.grader_name == "json_schema"
 
 
 async def test_schema_violations_lower_score():
-    step = JsonSchemaValidationStep()
+    step = JsonSchemaValidationGrader()
     # age has the wrong type -> one violation.
-    evaluation = await step.evaluate(
+    evaluation = await step.grade(
         result_of({"name": "Ada", "age": "old"}), make_case({"json_schema": SCHEMA})
     )
     assert evaluation.score == 7
@@ -110,27 +110,27 @@ async def test_schema_violations_lower_score():
 
 
 async def test_schema_unparseable_output_scores_1():
-    step = JsonSchemaValidationStep()
-    evaluation = await step.evaluate(
+    step = JsonSchemaValidationGrader()
+    evaluation = await step.grade(
         PromptResult(text="oops"), make_case({"json_schema": SCHEMA})
     )
     assert evaluation.score == 1
 
 
 async def test_schema_missing_config_is_neutral():
-    evaluation = await JsonSchemaValidationStep().evaluate(
+    evaluation = await JsonSchemaValidationGrader().grade(
         result_of({}), make_case({})
     )
     assert evaluation.score == 5
 
 
-# -- JsonExpectedMatchStep ------------------------------------------------------
+# -- JsonExpectedMatchGrader ------------------------------------------------------
 
 
 async def test_expected_full_match_scores_10():
-    step = JsonExpectedMatchStep()
+    step = JsonExpectedMatchGrader()
     expected = {"name": "Ada", "role": {"title": "engineer"}}
-    evaluation = await step.evaluate(
+    evaluation = await step.grade(
         result_of({"name": "Ada", "role": {"title": "engineer"}}),
         make_case({"expected_json": expected}),
     )
@@ -138,9 +138,9 @@ async def test_expected_full_match_scores_10():
 
 
 async def test_unexpected_output_fields_are_mismatches():
-    step = JsonExpectedMatchStep()
+    step = JsonExpectedMatchGrader()
     expected = {"name": "Ada"}
-    evaluation = await step.evaluate(
+    evaluation = await step.grade(
         result_of({"name": "Ada", "extra": 1}),
         make_case({"expected_json": expected}),
     )
@@ -152,8 +152,8 @@ async def test_unexpected_output_fields_are_mismatches():
 
 
 async def test_unexpected_null_output_field_is_ignored():
-    step = JsonExpectedMatchStep()
-    evaluation = await step.evaluate(
+    step = JsonExpectedMatchGrader()
+    evaluation = await step.grade(
         result_of({"name": "Ada", "extra": None}),
         make_case({"expected_json": {"name": "Ada"}}),
     )
@@ -162,8 +162,8 @@ async def test_unexpected_null_output_field_is_ignored():
 
 
 async def test_expected_null_with_output_value_is_mismatch():
-    step = JsonExpectedMatchStep()
-    evaluation = await step.evaluate(
+    step = JsonExpectedMatchGrader()
+    evaluation = await step.grade(
         result_of({"a": 1, "b": 2}),
         make_case({"expected_json": {"a": 1, "b": None}}),
     )
@@ -173,10 +173,10 @@ async def test_expected_null_with_output_value_is_mismatch():
 
 
 async def test_expected_null_fields_are_ignored():
-    step = JsonExpectedMatchStep()
+    step = JsonExpectedMatchGrader()
     # "city" is null in the EXPECTED object -> ignored, whatever the output has.
     expected = {"name": "Ada", "city": None}
-    evaluation = await step.evaluate(
+    evaluation = await step.grade(
         result_of({"name": "Ada"}), make_case({"expected_json": expected})
     )
     assert evaluation.score == 10
@@ -184,10 +184,10 @@ async def test_expected_null_fields_are_ignored():
 
 
 async def test_missing_or_null_in_output_is_mismatch():
-    step = JsonExpectedMatchStep()
+    step = JsonExpectedMatchGrader()
     expected = {"name": "Ada", "age": 36, "city": "London"}
     # name matches; age missing in output; city null in output -> 2 mismatches.
-    evaluation = await step.evaluate(
+    evaluation = await step.grade(
         result_of({"name": "Ada", "city": None}),
         make_case({"expected_json": expected}),
     )
@@ -198,10 +198,10 @@ async def test_missing_or_null_in_output_is_mismatch():
 
 
 async def test_expected_mismatch_percentage_scoring():
-    step = JsonExpectedMatchStep()
+    step = JsonExpectedMatchGrader()
     expected = {"a": 1, "b": 2}
     # a matches, b mismatches -> 50% -> 1 + 0.5 * 9 = 5.5 -> 6 (round).
-    evaluation = await step.evaluate(
+    evaluation = await step.grade(
         result_of({"a": 1, "b": 3}), make_case({"expected_json": expected})
     )
     assert evaluation.score == 6
@@ -209,16 +209,16 @@ async def test_expected_mismatch_percentage_scoring():
 
 
 async def test_nothing_comparable_is_neutral():
-    step = JsonExpectedMatchStep()
+    step = JsonExpectedMatchGrader()
     # Both sides null/missing everywhere -> everything ignored -> neutral.
-    evaluation = await step.evaluate(
+    evaluation = await step.grade(
         result_of({"a": None}), make_case({"expected_json": {"a": None, "b": None}})
     )
     assert evaluation.score == 5
 
 
 async def test_arrays_of_objects_compared_element_wise():
-    step = JsonExpectedMatchStep()
+    step = JsonExpectedMatchGrader()
     expected = {
         "items": [
             {"sku": "A", "qty": 1},
@@ -226,7 +226,7 @@ async def test_arrays_of_objects_compared_element_wise():
         ]
     }
     # First element matches fully; second has a wrong qty -> 3/4 matched.
-    evaluation = await step.evaluate(
+    evaluation = await step.grade(
         result_of({"items": [{"sku": "A", "qty": 1}, {"sku": "B", "qty": 99}]}),
         make_case({"expected_json": expected}),
     )
@@ -236,10 +236,10 @@ async def test_arrays_of_objects_compared_element_wise():
 
 
 async def test_array_length_mismatch_flagged():
-    step = JsonExpectedMatchStep()
+    step = JsonExpectedMatchGrader()
     expected = {"tags": ["a", "b"]}
     # Missing second element -> mismatch at $.tags[1]; extra third would too.
-    evaluation = await step.evaluate(
+    evaluation = await step.grade(
         result_of({"tags": ["a"]}), make_case({"expected_json": expected})
     )
     assert evaluation.score == 6  # 1/2 matched
@@ -247,8 +247,8 @@ async def test_array_length_mismatch_flagged():
 
 
 async def test_array_extra_element_flagged_as_unexpected():
-    step = JsonExpectedMatchStep()
-    evaluation = await step.evaluate(
+    step = JsonExpectedMatchGrader()
+    evaluation = await step.grade(
         result_of({"tags": ["a", "b"]}),
         make_case({"expected_json": {"tags": ["a"]}}),
     )
@@ -259,8 +259,8 @@ async def test_array_extra_element_flagged_as_unexpected():
 
 
 async def test_array_vs_non_array_is_mismatch():
-    step = JsonExpectedMatchStep()
-    evaluation = await step.evaluate(
+    step = JsonExpectedMatchGrader()
+    evaluation = await step.grade(
         result_of({"tags": "a,b"}), make_case({"expected_json": {"tags": ["a"]}})
     )
     assert evaluation.score == 1
@@ -268,9 +268,9 @@ async def test_array_vs_non_array_is_mismatch():
 
 
 async def test_top_level_array_full_match_scores_10():
-    step = JsonExpectedMatchStep()
+    step = JsonExpectedMatchGrader()
     expected = [{"sku": "A", "qty": 1}, {"sku": "B", "qty": 2}]
-    evaluation = await step.evaluate(
+    evaluation = await step.grade(
         result_of([{"sku": "A", "qty": 1}, {"sku": "B", "qty": 2}]),
         make_case({"expected_json": expected}),
     )
@@ -278,9 +278,9 @@ async def test_top_level_array_full_match_scores_10():
 
 
 async def test_top_level_array_partial_match():
-    step = JsonExpectedMatchStep()
+    step = JsonExpectedMatchGrader()
     # First element matches, second does not -> 1/2 -> 6.
-    evaluation = await step.evaluate(
+    evaluation = await step.grade(
         result_of(["a", "x"]), make_case({"expected_json": ["a", "b"]})
     )
     assert evaluation.score == 6
@@ -288,8 +288,8 @@ async def test_top_level_array_partial_match():
 
 
 async def test_top_level_array_expected_but_object_output_scores_1():
-    step = JsonExpectedMatchStep()
-    evaluation = await step.evaluate(
+    step = JsonExpectedMatchGrader()
+    evaluation = await step.grade(
         result_of({"a": 1}), make_case({"expected_json": [1, 2]})
     )
     assert evaluation.score == 1
@@ -297,16 +297,16 @@ async def test_top_level_array_expected_but_object_output_scores_1():
 
 
 async def test_expected_unparseable_and_non_object_score_1():
-    step = JsonExpectedMatchStep()
+    step = JsonExpectedMatchGrader()
     case = make_case({"expected_json": {"a": 1}})
-    assert (await step.evaluate(PromptResult(text="oops"), case)).score == 1
-    assert (await step.evaluate(result_of([1, 2]), case)).score == 1
+    assert (await step.grade(PromptResult(text="oops"), case)).score == 1
+    assert (await step.grade(result_of([1, 2]), case)).score == 1
 
 
 async def test_expected_nested_type_mismatch():
-    step = JsonExpectedMatchStep()
+    step = JsonExpectedMatchGrader()
     # expected dict, actual scalar at role -> mismatch.
-    evaluation = await step.evaluate(
+    evaluation = await step.grade(
         result_of({"role": "engineer"}),
         make_case({"expected_json": {"role": {"title": "engineer"}}}),
     )
@@ -314,9 +314,9 @@ async def test_expected_nested_type_mismatch():
 
 
 async def test_expected_nested_null_ignored_inside_object():
-    step = JsonExpectedMatchStep()
+    step = JsonExpectedMatchGrader()
     expected = {"role": {"title": "engineer", "level": None}}
-    evaluation = await step.evaluate(
+    evaluation = await step.grade(
         result_of({"role": {"title": "engineer"}}),
         make_case({"expected_json": expected}),
     )

@@ -6,7 +6,7 @@ from collections import deque
 from typing import Iterable, Optional
 
 from app.core.interfaces import (
-    EvaluationStep,
+    Grader,
     PromptExecutor,
     PromptImprover,
     Summarizer,
@@ -32,7 +32,7 @@ class FakeExecutor(PromptExecutor):
         return PromptResult(text=f"result[{test_case.name}]: {prompt.text}")
 
 
-class FakeEvaluationStep(EvaluationStep):
+class FakeGrader(Grader):
     """Returns a scripted sequence of scores (repeating the last one)."""
 
     def __init__(self, name: str = "fake-step", scores: Iterable[int] = (8,)) -> None:
@@ -41,7 +41,7 @@ class FakeEvaluationStep(EvaluationStep):
         self._last = self._scores[-1]
         self.calls = 0
 
-    async def evaluate(
+    async def grade(
         self, result: PromptResult, test_case: TestCase
     ) -> PromptEvaluation:
         self.calls += 1
@@ -51,16 +51,16 @@ class FakeEvaluationStep(EvaluationStep):
             weaknesses=[f"weakness-{score}"],
             reasoning=f"scripted score {score} for {test_case.name}",
             score=score,
-            step_name=self.name,
+            grader_name=self.name,
         )
 
 
-class FailingEvaluationStep(EvaluationStep):
+class FailingGrader(Grader):
     """Always raises — used to exercise per-point failure isolation."""
 
     name = "failing-step"
 
-    async def evaluate(
+    async def grade(
         self, result: PromptResult, test_case: TestCase
     ) -> PromptEvaluation:
         raise RuntimeError("scripted step failure")

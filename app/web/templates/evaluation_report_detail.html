@@ -45,15 +45,15 @@
   <pre class="prompt">{{ report.reasoning }}</pre>
 </section>
 
-{% if report.step_evaluations %}
+{% if report.grader_evaluations %}
 <section>
-  <h2>Per-step evaluations</h2>
+  <h2>Per-grader evaluations</h2>
   <table>
-    <thead><tr><th>Step</th><th>Score</th><th>Strengths</th><th>Weaknesses</th><th>Reasoning</th></tr></thead>
+    <thead><tr><th>Grader</th><th>Score</th><th>Strengths</th><th>Weaknesses</th><th>Reasoning</th></tr></thead>
     <tbody>
-      {% for e in report.step_evaluations %}
+      {% for e in report.grader_evaluations %}
       <tr>
-        <td>{{ e.step_name or 'step' }}</td>
+        <td>{{ e.grader_name or 'grader' }}</td>
         <td><span class="score">{{ e.score }}</span></td>
         <td><ul class="compact">{% for s in e.strengths %}<li>{{ s }}</li>{% endfor %}</ul></td>
         <td><ul class="compact">{% for w in e.weaknesses %}<li>{{ w }}</li>{% endfor %}</ul></td>

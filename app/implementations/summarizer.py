@@ -1,13 +1,13 @@
 """Reference :class:`Summarizer` implementations (Task 10).
 
-Two summarizers condense many per-step :class:`PromptEvaluation` objects (across
+Two summarizers condense many per-grader :class:`PromptEvaluation` objects (across
 all test cases × executions) into a single compact :class:`EvaluationSummary`
 (consolidated strengths, weaknesses, reasoning) used to update optimizer state
 and feed the next improvement step.
 
 * :class:`FrequencySummarizer` (registered ``frequency``) — a deterministic,
   offline aggregator. It ranks strengths/weaknesses by frequency, keeps the
-  top-K of each, and concatenates/trims the per-step reasoning. It performs
+  top-K of each, and concatenates/trims the per-grader reasoning. It performs
   **zero external/LLM calls**, making it suitable for tests and offline mode.
 
 * :class:`LLMSummarizer` (registered ``default``) — composes all
@@ -148,7 +148,7 @@ class FrequencySummarizer(Summarizer):
 class LLMSummarizer(Summarizer):
     """LLM-backed summarizer with a deterministic frequency fallback.
 
-    Composes the per-step strengths/weaknesses/reasoning + scores into a prompt,
+    Composes the per-grader strengths/weaknesses/reasoning + scores into a prompt,
     asks the *active* :class:`LLMRunner` for a concise structured JSON summary,
     and parses it into an :class:`EvaluationSummary` bounded by ``top_k``. Any
     runner, parse, or validation failure falls back to
@@ -198,7 +198,7 @@ class LLMSummarizer(Summarizer):
 
         payload = [
             {
-                "step_name": evaluation.step_name,
+                "grader_name": evaluation.grader_name,
                 "score": evaluation.score,
                 "strengths": evaluation.strengths,
                 "weaknesses": evaluation.weaknesses,
