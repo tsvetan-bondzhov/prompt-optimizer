@@ -14,18 +14,24 @@ from app.services.evaluator import EvaluatorService
 from tests.fakes import FailingGrader, FakeGrader, FakeExecutor
 
 
-def make_evaluator(db, steps) -> EvaluatorService:
+def make_evaluator(db, graders) -> EvaluatorService:
+    by_name = {g.name: g for g in graders}
     return EvaluatorService(
         EvaluationReportRepository(db),
         EvaluationRunRepository(db),
         executor_resolver=FakeExecutor,
-        graders_resolver=lambda: steps,
+        grader_resolver=lambda name: by_name[name],
         aggregator_resolver=lambda: mean_aggregator,
     )
 
 
-def make_test_cases(n: int) -> list[TestCase]:
-    return [TestCase(name=f"tc{i}") for i in range(n)]
+def make_test_cases(
+    n: int, grader_names: list[str] = ("fake-step",)
+) -> list[TestCase]:
+    return [
+        TestCase(name=f"tc{i}", grader_names=list(grader_names))
+        for i in range(n)
+    ]
 
 
 async def test_produces_exactly_cases_times_n_reports(db):
@@ -48,7 +54,9 @@ async def test_avg_score_is_mean_of_points(db):
 async def test_multiple_steps_aggregate_per_point(db):
     steps = [FakeGrader("a", scores=(4,)), FakeGrader("b", scores=(8,))]
     evaluator = make_evaluator(db, steps)
-    result = await evaluator.run(PromptText(text="p"), make_test_cases(1), 1)
+    result = await evaluator.run(
+        PromptText(text="p"), make_test_cases(1, ["a", "b"]), 1
+    )
     assert result.points[0].aggregated_score == pytest.approx(6.0)
     assert len(result.points[0].grader_evaluations) == 2
 
@@ -73,7 +81,9 @@ async def test_rejects_empty_test_cases_and_bad_n(db):
 
 async def test_failing_step_isolated_as_failed_report(db):
     evaluator = make_evaluator(db, [FailingGrader()])
-    result = await evaluator.run(PromptText(text="p"), make_test_cases(1), 1)
+    result = await evaluator.run(
+        PromptText(text="p"), make_test_cases(1, ["failing-step"]), 1
+    )
 
     assert result.points[0].aggregated_score == 1.0
     report = await EvaluationReportRepository(db).get(result.report_ids[0])
@@ -95,7 +105,11 @@ async def test_each_data_entry_executed_and_scored_individually(db):
     # One test case with 3 data entries: the shared grader yields 4, 8, 9.
     step = FakeGrader(scores=(4, 8, 9))
     evaluator = make_evaluator(db, [step])
-    test_case = TestCase(name="tc", data=[{"a": 1}, {"a": 2}, {"a": 3}])
+    test_case = TestCase(
+        name="tc",
+        data=[{"a": 1}, {"a": 2}, {"a": 3}],
+        grader_names=["fake-step"],
+    )
 
     result = await evaluator.run(PromptText(text="p"), [test_case], 1)
 
@@ -118,13 +132,25 @@ async def test_failing_entry_is_isolated(db):
         EvaluationReportRepository(db),
         EvaluationRunRepository(db),
         executor_resolver=FailFirstExecutor,
-        graders_resolver=lambda: [FakeGrader(scores=(9,))],
+        grader_resolver=lambda name: FakeGrader(scores=(9,)),
         aggregator_resolver=lambda: mean_aggregator,
     )
-    test_case = TestCase(name="tc", data=[{"boom": True}, {"ok": True}])
+    test_case = TestCase(
+        name="tc",
+        data=[{"boom": True}, {"ok": True}],
+        grader_names=["fake-step"],
+    )
     result = await evaluator.run(PromptText(text="p"), [test_case], 1)
 
     point = result.points[0]
     assert point.aggregated_score == pytest.approx(5.0)
     report = await EvaluationReportRepository(db).get(result.report_ids[0])
     assert any("scripted entry failure" in w for w in report["weaknesses"])
+
+
+async def test_test_case_without_graders_rejected(db):
+    evaluator = make_evaluator(db, [FakeGrader()])
+    with pytest.raises(ValueError, match="no graders selected"):
+        await evaluator.run(
+            PromptText(text="p"), make_test_cases(1, grader_names=[]), 1
+        )

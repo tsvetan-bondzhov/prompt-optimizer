@@ -28,7 +28,7 @@ async def make_env(db, scores, *, avg_score=None):
     iteration) consumes exactly one score.
     """
 
-    test_case = TestCase(name="tc")
+    test_case = TestCase(name="tc", grader_names=["fake-step"])
     await TestCaseRepository(db).create(test_case.model_dump())
 
     prompt = Prompt(
@@ -45,7 +45,7 @@ async def make_env(db, scores, *, avg_score=None):
         EvaluationReportRepository(db),
         EvaluationRunRepository(db),
         executor_resolver=FakeExecutor,
-        graders_resolver=lambda: [step],
+        grader_resolver=lambda name: step,
         aggregator_resolver=lambda: mean_aggregator,
     )
     optimizer = OptimizerService(

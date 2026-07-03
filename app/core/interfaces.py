@@ -4,10 +4,10 @@ These abstract base classes define the pluggable seams of the framework. Concret
 implementations are registered by name in :mod:`app.core.registry` and selected
 through configuration (see :class:`app.config.Settings`).
 
-- :class:`PromptExecutor` and :class:`Grader` / :func:`prepare_graders`
-  are **user-supplied** (reference examples ship in ``app/implementations``).
-  Graders do **not** ship a built-in LLM call — users wire their own
-  scoring logic.
+- :class:`PromptExecutor` and :class:`Grader` are **user-supplied**
+  (reference examples ship in ``app/implementations``). Graders register by
+  name under the ``grader`` category and are selected per test case via
+  ``TestCase.grader_names``.
 - :class:`PromptOptimizer` and :class:`Summarizer` use a pluggable
   :class:`LLMRunner` (default = Claude Code headless runner).
 - :class:`Aggregator` collapses per-grader scores for a single evaluation point
@@ -31,7 +31,6 @@ from app.models import (
 __all__ = [
     "PromptExecutor",
     "Grader",
-    "PrepareGraders",
     "PromptOptimizer",
     "Summarizer",
     "LLMRunner",
@@ -89,19 +88,6 @@ class Grader(ABC):
     ) -> PromptEvaluation:
         """Grade ``result`` for one data entry and return a structured score."""
         raise NotImplementedError
-
-
-@runtime_checkable
-class PrepareGraders(Protocol):
-    """Callable returning the ordered list of graders to run.
-
-    User code implements this factory; the registry stores and resolves it under
-    the ``grader_prepare`` category.
-    """
-
-    def __call__(self) -> list[Grader]:
-        """Return ordered, concrete :class:`Grader` instances."""
-        ...
 
 
 class PromptOptimizer(ABC):

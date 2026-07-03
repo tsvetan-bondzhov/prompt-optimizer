@@ -33,7 +33,11 @@ STEP_FIELDS = {
 def _setup_prompt(client):
     tc = client.post(
         "/api/test-cases",
-        json={"name": "tc", "data": {"input": "x"}, "evaluation_criteria": {}},
+        json={
+            "name": "tc",
+            "data": [{"input": "x"}],
+            "grader_names": ["fake"],
+        },
     ).json()
     prompt = client.post(
         "/api/prompts",

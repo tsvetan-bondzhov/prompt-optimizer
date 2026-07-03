@@ -44,11 +44,7 @@ def registered_fakes():
 
     register_builtins()
     register("executor", "default", FakeExecutor)
-    register(
-        "grader_prepare",
-        "default",
-        lambda: [FakeGrader(scores=(8,))],
-    )
+    register("grader", "fake", lambda: FakeGrader(scores=(8,)))
     register("optimizer", "claude_code", FakeOptimizer)
     register("summarizer", "default", FakeSummarizer)
     register("llm_runner", "claude_code", FakeLLMRunner)

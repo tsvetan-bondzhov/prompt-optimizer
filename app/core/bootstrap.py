@@ -5,7 +5,7 @@ registry. It is idempotent.
 
 This module only registers framework-provided defaults (currently the mean
 aggregator). User-supplied / reference implementations — concrete
-``PromptExecutor``, ``Grader`` + ``prepare_graders()``,
+``PromptExecutor``, ``Grader``,
 ``PromptOptimizer``, ``Summarizer`` and ``LLMRunner`` — live under
 ``app/implementations`` and ``app/llm`` (Tasks 06/07/10). When those exist they
 register themselves here (or via import side effects in
@@ -48,8 +48,8 @@ def register_builtins() -> None:
 
     # Reference implementations (Task 07): importing the package fires the
     # module-level registrations — the reference PromptExecutor under
-    # ("executor", "default") and prepare_graders() under
-    # ("grader_prepare", "default"). Imported lazily here to keep
+    # ("executor", "default") and the reference graders under the "grader"
+    # category. Imported lazily here to keep
     # import-time side effects out of the core package.
     import app.implementations  # noqa: F401
 

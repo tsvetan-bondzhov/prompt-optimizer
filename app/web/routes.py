@@ -27,6 +27,7 @@ from app.api.deps import (
     get_test_case_repository,
 )
 from app.api.routes_evaluation import resolve_test_cases
+from app.core.registry import available
 from app.db.repositories import (
     EvaluationReportRepository,
     EvaluationRunRepository,
@@ -138,7 +139,12 @@ async def test_cases_page(
 
 @router.get("/test-cases/new", response_class=HTMLResponse)
 async def test_case_new(request: Request) -> HTMLResponse:
-    return _render(request, "test_case_form.html", test_case=None)
+    return _render(
+        request,
+        "test_case_form.html",
+        test_case=None,
+        available_graders=available("grader"),
+    )
 
 
 @router.post("/test-cases")
@@ -157,6 +163,7 @@ async def test_case_create(
         evaluation_criteria=_parse_json_field(
             str(form.get("evaluation_criteria", "")), "evaluation_criteria"
         ),
+        grader_names=[str(v) for v in form.getlist("grader_names")],
     )
     await repo.create(test_case.model_dump())
     return RedirectResponse("/test-cases", status_code=status.HTTP_303_SEE_OTHER)
@@ -188,6 +195,7 @@ async def test_case_import(
                 item.get("evaluation_criteria_per_entry") or []
             ),
             evaluation_criteria=item.get("evaluation_criteria") or {},
+            grader_names=item.get("grader_names") or [],
         )
         await repo.create(test_case.model_dump())
     return RedirectResponse("/test-cases", status_code=status.HTTP_303_SEE_OTHER)
@@ -202,7 +210,12 @@ async def test_case_edit(
     doc = await repo.get(test_case_id)
     if doc is None:
         raise HTTPException(status_code=404, detail="Test case not found.")
-    return _render(request, "test_case_form.html", test_case=doc)
+    return _render(
+        request,
+        "test_case_form.html",
+        test_case=doc,
+        available_graders=available("grader"),
+    )
 
 
 @router.post("/test-cases/{test_case_id}")
@@ -224,6 +237,7 @@ async def test_case_update(
             "evaluation_criteria": _parse_json_field(
                 str(form.get("evaluation_criteria", "")), "evaluation_criteria"
             ),
+            "grader_names": [str(v) for v in form.getlist("grader_names")],
         },
     )
     return RedirectResponse("/test-cases", status_code=status.HTTP_303_SEE_OTHER)

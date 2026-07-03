@@ -6,7 +6,7 @@ from __future__ import annotations
 def _make_test_case(client, name="tc"):
     return client.post(
         "/api/test-cases",
-        json={"name": name, "data": {}, "evaluation_criteria": {}},
+        json={"name": name, "data": [], "grader_names": ["fake"]},
     ).json()
 
 

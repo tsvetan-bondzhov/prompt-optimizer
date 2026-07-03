@@ -7,7 +7,7 @@ Services then resolve the *active* implementation by name from
 
 Categories:
     ``executor``            -> :class:`~app.core.interfaces.PromptExecutor`
-    ``grader_prepare``  -> :class:`~app.core.interfaces.PrepareGraders`
+    ``grader``              -> :class:`~app.core.interfaces.Grader`
     ``optimizer``            -> :class:`~app.core.interfaces.PromptOptimizer`
     ``summarizer``          -> :class:`~app.core.interfaces.Summarizer`
     ``llm_runner``          -> :class:`~app.core.interfaces.LLMRunner`
@@ -41,7 +41,7 @@ __all__ = [
     "available",
     "clear",
     "get_executor",
-    "get_graders",
+    "get_grader",
     "get_prompt_optimizer",
     "get_summarizer",
     "get_llm_runner",
@@ -53,7 +53,7 @@ Factory = Callable[[], Any]
 
 CATEGORIES: tuple[str, ...] = (
     "executor",
-    "grader_prepare",
+    "grader",
     "optimizer",
     "summarizer",
     "llm_runner",
@@ -148,17 +148,14 @@ def get_executor() -> PromptExecutor:
     return resolve("executor", get_settings().ACTIVE_EXECUTOR)
 
 
-def get_graders() -> list[Grader]:
-    """Call the active ``prepare_graders()`` factory and return its steps.
+def get_grader(name: str) -> Grader:
+    """Resolve a :class:`Grader` registered under ``name``.
 
-    The active prepare key reuses ``ACTIVE_EXECUTOR`` since the executor and the
-    graders form a matched user-supplied pair.
+    Graders are selected **per test case** (``TestCase.grader_names``); use
+    :func:`available` with the ``"grader"`` category to list the choices.
     """
 
-    # The registered factory IS ``prepare_graders``; resolving it invokes the
-    # factory, which returns the ordered list of Grader instances.
-    steps = resolve("grader_prepare", get_settings().ACTIVE_EXECUTOR)
-    return steps
+    return resolve("grader", name)
 
 
 def get_prompt_optimizer() -> PromptOptimizer:

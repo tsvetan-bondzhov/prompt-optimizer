@@ -13,10 +13,7 @@ Configuration (see :class:`app.config.Settings` / ``.env``):
 - ``OLLAMA_MODEL`` — model name passed to Ollama (default ``mistral``).
 - ``OLLAMA_TIMEOUT_SECONDS`` — request timeout (default ``120``).
 
-It registers itself under ``("executor", "ollama_mistral")`` on import; the
-default ``prepare_graders`` factory is registered under the same name so
-setting ``ACTIVE_EXECUTOR=ollama_mistral`` resolves a complete executor/steps
-pair.
+It registers itself under ``("executor", "ollama_mistral")`` on import.
 """
 
 from __future__ import annotations
@@ -30,7 +27,6 @@ import httpx
 from app.config import get_settings
 from app.core.interfaces import PromptExecutor
 from app.core.registry import register
-from app.implementations.prepare import prepare_graders
 from app.models import PromptText, PromptResult, TestCase
 
 __all__ = ["OllamaMistralExecutor", "OllamaExecutorError", "render_prompt_template"]
@@ -113,4 +109,3 @@ class OllamaMistralExecutor(PromptExecutor):
 # Register the executor and pair it with the default evaluation steps so
 # ``ACTIVE_EXECUTOR=ollama_mistral`` resolves both seams.
 register("executor", "ollama_mistral", OllamaMistralExecutor)
-register("grader_prepare", "ollama_mistral", prepare_graders)

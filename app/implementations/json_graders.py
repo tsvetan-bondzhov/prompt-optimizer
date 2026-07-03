@@ -12,10 +12,8 @@ Two steps for prompts whose output is expected to be JSON:
   compared element-wise, and a path is ignored only when it is null/missing on
   both sides. The score is the percentage of compared fields that matched.
 
-Use them by returning instances from your ``prepare_graders()`` factory::
-
-    def prepare_graders() -> list[Grader]:
-        return [JsonSchemaValidationGrader(), JsonExpectedMatchGrader()]
+Use them by selecting their names in a test case's ``grader_names``
+(``json_schema`` / ``json_expected_match``).
 
 Markdown code fences: by default the output must be **pure JSON** — a fenced
 block (```json ... ```) fails parsing and scores ``1``. Set the
@@ -34,6 +32,7 @@ from jsonschema import Draft202012Validator
 
 from app.config import get_settings
 from app.core.interfaces import Grader
+from app.core.registry import register
 from app.implementations.graders import clamp_score, trim
 from app.models import PromptEvaluation, PromptResult, TestCase
 
@@ -386,3 +385,9 @@ class JsonExpectedMatchGrader(_JsonGraderBase):
             matched.append(path)
         else:
             mismatched.append(f"{path}: value does not match the expected value")
+
+
+# Register the JSON graders by name; test cases select graders through
+# ``TestCase.grader_names``.
+register("grader", JsonSchemaValidationGrader.name, JsonSchemaValidationGrader)
+register("grader", JsonExpectedMatchGrader.name, JsonExpectedMatchGrader)

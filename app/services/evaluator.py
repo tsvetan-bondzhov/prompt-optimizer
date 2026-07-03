@@ -31,8 +31,8 @@ from app.core.interfaces import (
 )
 from app.core.registry import (
     get_aggregator,
-    get_graders,
     get_executor,
+    get_grader,
 )
 from app.db.repositories.reports import (
     EvaluationReportRepository,
@@ -60,7 +60,7 @@ ProgressHook = Callable[[dict[str, Any]], Optional[Awaitable[None]]]
 
 # Resolver callables (default to the registry helpers, overridable for tests).
 ExecutorResolver = Callable[[], PromptExecutor]
-GradersResolver = Callable[[], list[Grader]]
+GraderResolver = Callable[[str], Grader]  # name -> Grader instance
 AggregatorResolver = Callable[[], Aggregator]
 
 
@@ -91,20 +91,21 @@ class EvaluatorService:
         run_repository: EvaluationRunRepository,
         *,
         executor_resolver: ExecutorResolver = get_executor,
-        graders_resolver: GradersResolver = get_graders,
+        grader_resolver: GraderResolver = get_grader,
         aggregator_resolver: AggregatorResolver = get_aggregator,
     ) -> None:
         """:param report_repository: Persists one report per evaluation point.
         :param run_repository: Persists/updates the grouping evaluation run.
         :param executor_resolver: Returns the active :class:`PromptExecutor`.
-        :param graders_resolver: Returns the ordered graders to run.
+        :param grader_resolver: Resolves a grader name to an instance; each
+            test case selects its graders via ``grader_names``.
         :param aggregator_resolver: Returns the per-point score aggregator.
         """
 
         self._reports = report_repository
         self._runs = run_repository
         self._executor_resolver = executor_resolver
-        self._steps_resolver = graders_resolver
+        self._grader_resolver = grader_resolver
         self._aggregator_resolver = aggregator_resolver
 
     async def run(
@@ -146,8 +147,19 @@ class EvaluatorService:
             )
 
         executor = self._executor_resolver()
-        steps = self._steps_resolver()
         aggregator = self._aggregator_resolver()
+
+        # Resolve each test case's selected graders up front (fail fast on an
+        # empty selection or an unknown grader name).
+        graders_by_case: dict[str, list[Grader]] = {}
+        for test_case in test_cases:
+            if not test_case.grader_names:
+                raise ValueError(
+                    f"Test case {test_case.name!r} has no graders selected."
+                )
+            graders_by_case[test_case.id] = [
+                self._grader_resolver(name) for name in test_case.grader_names
+            ]
 
         total = executions_per_test_case * len(test_cases)
 
@@ -179,7 +191,7 @@ class EvaluatorService:
                         test_case=test_case,
                         execution_index=execution_index,
                         executor=executor,
-                        steps=steps,
+                        graders=graders_by_case[test_case.id],
                         aggregator=aggregator,
                         run_id=run_id,
                     )
@@ -255,7 +267,7 @@ class EvaluatorService:
         test_case: TestCase,
         execution_index: int,
         executor: PromptExecutor,
-        steps: list[Grader],
+        graders: list[Grader],
         aggregator: Aggregator,
         run_id: Optional[str],
     ) -> tuple[EvaluationPoint, str, Optional[str]]:
@@ -276,7 +288,7 @@ class EvaluatorService:
             try:
                 result = await executor.execute(prompt, test_case, entry)
                 grader_evals = await self._run_graders(
-                    steps, result, test_case, entry_index
+                    graders, result, test_case, entry_index
                 )
                 entry_score = (
                     float(aggregator(grader_evals)) if grader_evals else 0.0

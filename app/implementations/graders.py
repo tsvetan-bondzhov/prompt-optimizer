@@ -27,6 +27,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.core.interfaces import Grader
+from app.core.registry import register
 from app.models import PromptEvaluation, PromptResult, TestCase
 
 __all__ = [
@@ -194,3 +195,9 @@ class ResponseQualityGrader(Grader):
             score=clamp_score(score),
             grader_name=self.name,
         )
+
+
+# Register the reference graders by name; test cases select graders through
+# ``TestCase.grader_names``.
+register("grader", KeywordCoverageGrader.name, KeywordCoverageGrader)
+register("grader", ResponseQualityGrader.name, ResponseQualityGrader)

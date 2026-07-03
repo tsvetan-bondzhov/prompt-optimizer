@@ -57,6 +57,10 @@ class _TestCaseFields(BaseModel):
         default_factory=dict,
         description="Dataset-level criteria (fallback for all entries).",
     )
+    grader_names: list[str] = Field(
+        default_factory=list,
+        description="Registered grader names to execute for this test case.",
+    )
 
     @field_validator("data", mode="before")
     @classmethod
