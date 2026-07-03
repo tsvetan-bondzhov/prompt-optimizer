@@ -132,12 +132,12 @@ def _include_routers(app: FastAPI) -> None:
         routes_optimization,
         routes_progress,
         routes_reports,
-        routes_state,
+        routes_prompts,
         routes_testcases,
     )
 
     app.include_router(routes_testcases.router)
-    app.include_router(routes_state.router)
+    app.include_router(routes_prompts.router)
     app.include_router(routes_evaluation.router)
     app.include_router(routes_optimization.router)
     app.include_router(routes_reports.router)

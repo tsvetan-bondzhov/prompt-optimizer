@@ -1,14 +1,15 @@
 {% extends "base.html" %}
-{% block title %}{{ state.goal }} — Prompt Optimizer{% endblock %}
+{% block title %}{{ prompt.goal }} — Prompt Optimizer{% endblock %}
 {% block content %}
 <div class="section-head">
-  <h1>{{ state.goal }}</h1>
+  <h1>{{ prompt.name }}</h1>
+  <p class="muted">{{ prompt.goal }}</p>
   <div class="actions">
-    <a class="btn" href="/states/{{ state.id }}/edit">Edit</a>
-    <a class="btn" href="/evaluate?state_id={{ state.id }}">Evaluate</a>
-    <a class="btn primary" href="/optimize?state_id={{ state.id }}">Optimize</a>
-    <form method="post" action="/states/{{ state.id }}/delete" class="inline"
-          onsubmit="return confirm('Delete this state?');">
+    <a class="btn" href="/prompts/{{ prompt.id }}/edit">Edit</a>
+    <a class="btn" href="/evaluate?prompt_id={{ prompt.id }}">Evaluate</a>
+    <a class="btn primary" href="/optimize?prompt_id={{ prompt.id }}">Optimize</a>
+    <form method="post" action="/prompts/{{ prompt.id }}/delete" class="inline"
+          onsubmit="return confirm('Delete this prompt?');">
       <button class="btn danger" type="submit">Delete</button>
     </form>
   </div>
@@ -17,8 +18,8 @@
 <div class="cards">
   <div class="card">
     <h3>Average score</h3>
-    {% if state.avg_score is not none %}
-      <p class="big-score">{{ '%.2f'|format(state.avg_score) }} <span class="muted">/ 10</span></p>
+    {% if prompt.avg_score is not none %}
+      <p class="big-score">{{ '%.2f'|format(prompt.avg_score) }} <span class="muted">/ 10</span></p>
     {% else %}
       <p class="muted">No baseline yet — run an optimization to establish one.</p>
     {% endif %}
@@ -33,23 +34,23 @@
 
 <section>
   <h2>Current prompt</h2>
-  <pre class="prompt">{{ state.current_prompt }}</pre>
+  <pre class="prompt">{{ prompt.current_prompt }}</pre>
 </section>
 
-{% if state.strengths or state.weaknesses or state.reasoning %}
+{% if prompt.strengths or prompt.weaknesses or prompt.reasoning %}
 <section>
   <h2>Latest summary</h2>
   <div class="cards">
     <div class="card ok">
       <h3>Strengths</h3>
-      <ul>{% for s in state.strengths %}<li>{{ s }}</li>{% else %}<li class="muted">—</li>{% endfor %}</ul>
+      <ul>{% for s in prompt.strengths %}<li>{{ s }}</li>{% else %}<li class="muted">—</li>{% endfor %}</ul>
     </div>
     <div class="card warn">
       <h3>Weaknesses</h3>
-      <ul>{% for w in state.weaknesses %}<li>{{ w }}</li>{% else %}<li class="muted">—</li>{% endfor %}</ul>
+      <ul>{% for w in prompt.weaknesses %}<li>{{ w }}</li>{% else %}<li class="muted">—</li>{% endfor %}</ul>
     </div>
   </div>
-  {% if state.reasoning %}<h3>Reasoning</h3><pre class="prompt">{{ state.reasoning }}</pre>{% endif %}
+  {% if prompt.reasoning %}<h3>Reasoning</h3><pre class="prompt">{{ prompt.reasoning }}</pre>{% endif %}
 </section>
 {% endif %}
 
@@ -69,6 +70,6 @@
       {% endfor %}
     </tbody>
   </table>
-  {% else %}<p class="muted">No runs yet for this state.</p>{% endif %}
+  {% else %}<p class="muted">No runs yet for this prompt.</p>{% endif %}
 </section>
 {% endblock %}

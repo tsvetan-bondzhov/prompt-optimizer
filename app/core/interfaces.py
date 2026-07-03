@@ -22,7 +22,7 @@ from typing import Protocol, runtime_checkable
 from app.models import (
     EvaluationSummary,
     OptimizationContext,
-    Prompt,
+    PromptText,
     PromptEvaluation,
     PromptResult,
     TestCase,
@@ -48,7 +48,7 @@ class PromptExecutor(ABC):
     """
 
     @abstractmethod
-    async def execute(self, prompt: Prompt, test_case: TestCase) -> PromptResult:
+    async def execute(self, prompt: PromptText, test_case: TestCase) -> PromptResult:
         """Run ``prompt`` against ``test_case`` and return the produced result."""
         raise NotImplementedError
 
@@ -88,8 +88,8 @@ class PromptOptimizer(ABC):
     """Proposes an improved prompt from the current optimization context."""
 
     @abstractmethod
-    async def optimize(self, ctx: OptimizationContext) -> Prompt:
-        """Return an improved :class:`Prompt` given ``ctx``."""
+    async def optimize(self, ctx: OptimizationContext) -> PromptText:
+        """Return an improved :class:`PromptText` given ``ctx``."""
         raise NotImplementedError
 
 

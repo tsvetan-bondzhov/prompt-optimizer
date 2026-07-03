@@ -1,7 +1,7 @@
-"""Optimization state management routes (Task 13).
+"""Prompt management routes (Task 13).
 
-JSON API under ``/api/states``: create/list/get/update/delete
-:class:`OptimizationState` documents (goal, current prompt, linked test cases).
+JSON API under ``/api/prompts``: create/list/get/update/delete
+:class:`Prompt` documents (name, goal, current prompt, linked test cases).
 """
 
 from __future__ import annotations
@@ -11,28 +11,30 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.api.deps import get_state_repository, get_test_case_repository
-from app.db.repositories import OptimizationStateRepository, TestCaseRepository
-from app.models import OptimizationState
+from app.api.deps import get_prompt_repository, get_test_case_repository
+from app.db.repositories import PromptRepository, TestCaseRepository
+from app.models import Prompt
 
-router = APIRouter(prefix="/api/states", tags=["states"])
+router = APIRouter(prefix="/api/prompts", tags=["prompts"])
 
 
-class StateCreate(BaseModel):
-    """Request payload for creating an optimization state."""
+class PromptCreate(BaseModel):
+    """Request payload for creating a prompt."""
 
     model_config = ConfigDict(extra="forbid")
 
+    name: str = Field(..., min_length=1)
     goal: str = Field(..., min_length=1)
     current_prompt: str = Field(..., min_length=1)
     test_case_ids: list[str] = Field(default_factory=list)
 
 
-class StateUpdate(BaseModel):
+class PromptUpdate(BaseModel):
     """Partial update payload; omitted fields are left unchanged."""
 
     model_config = ConfigDict(extra="forbid")
 
+    name: Optional[str] = Field(default=None, min_length=1)
     goal: Optional[str] = Field(default=None, min_length=1)
     current_prompt: Optional[str] = Field(default=None, min_length=1)
     test_case_ids: Optional[list[str]] = Field(default=None)
@@ -55,53 +57,53 @@ async def _validate_test_case_ids(
 
 
 @router.post(
-    "", response_model=OptimizationState, status_code=status.HTTP_201_CREATED
+    "", response_model=Prompt, status_code=status.HTTP_201_CREATED
 )
-async def create_state(
-    payload: StateCreate,
-    repo: OptimizationStateRepository = Depends(get_state_repository),
+async def create_prompt(
+    payload: PromptCreate,
+    repo: PromptRepository = Depends(get_prompt_repository),
     test_cases: TestCaseRepository = Depends(get_test_case_repository),
 ) -> Any:
     await _validate_test_case_ids(payload.test_case_ids, test_cases)
-    state = OptimizationState(**payload.model_dump())
-    return await repo.create(state.model_dump())
+    prompt = Prompt(**payload.model_dump())
+    return await repo.create(prompt.model_dump())
 
 
-@router.get("", response_model=list[OptimizationState])
-async def list_states(
+@router.get("", response_model=list[Prompt])
+async def list_prompts(
     skip: int = 0,
     limit: int = 100,
-    repo: OptimizationStateRepository = Depends(get_state_repository),
+    repo: PromptRepository = Depends(get_prompt_repository),
 ) -> Any:
     return await repo.list(skip=skip, limit=limit)
 
 
-@router.get("/{state_id}", response_model=OptimizationState)
-async def get_state(
-    state_id: str,
-    repo: OptimizationStateRepository = Depends(get_state_repository),
+@router.get("/{prompt_id}", response_model=Prompt)
+async def get_prompt(
+    prompt_id: str,
+    repo: PromptRepository = Depends(get_prompt_repository),
 ) -> Any:
-    doc = await repo.get(state_id)
+    doc = await repo.get(prompt_id)
     if doc is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"State {state_id!r} not found.",
+            detail=f"Prompt {prompt_id!r} not found.",
         )
     return doc
 
 
-@router.put("/{state_id}", response_model=OptimizationState)
-async def update_state(
-    state_id: str,
-    payload: StateUpdate,
-    repo: OptimizationStateRepository = Depends(get_state_repository),
+@router.put("/{prompt_id}", response_model=Prompt)
+async def update_prompt(
+    prompt_id: str,
+    payload: PromptUpdate,
+    repo: PromptRepository = Depends(get_prompt_repository),
     test_cases: TestCaseRepository = Depends(get_test_case_repository),
 ) -> Any:
-    existing = await repo.get(state_id)
+    existing = await repo.get(prompt_id)
     if existing is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"State {state_id!r} not found.",
+            detail=f"Prompt {prompt_id!r} not found.",
         )
 
     changes = payload.model_dump(exclude_none=True)
@@ -118,16 +120,16 @@ async def update_state(
             {"avg_score": None, "strengths": [], "weaknesses": [], "reasoning": ""}
         )
 
-    return await repo.update(state_id, changes)
+    return await repo.update(prompt_id, changes)
 
 
-@router.delete("/{state_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_state(
-    state_id: str,
-    repo: OptimizationStateRepository = Depends(get_state_repository),
+@router.delete("/{prompt_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_prompt(
+    prompt_id: str,
+    repo: PromptRepository = Depends(get_prompt_repository),
 ) -> None:
-    if not await repo.delete(state_id):
+    if not await repo.delete(prompt_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"State {state_id!r} not found.",
+            detail=f"Prompt {prompt_id!r} not found.",
         )

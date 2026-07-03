@@ -13,13 +13,13 @@ from app.models.evaluation import (
 from app.models.optimization import (
     OptimizationContext,
     OptimizationRun,
-    OptimizationState,
+    Prompt,
     OptimizationStep,
     RunConfig,
     RunProgress,
     RunStatus,
 )
-from app.models.prompt import Prompt, PromptResult
+from app.models.prompt import PromptText, PromptResult
 from app.models.test_case import TestCase, TestCaseCreate
 
 __all__ = [
@@ -27,7 +27,7 @@ __all__ = [
     "new_id",
     "utcnow",
     # prompt
-    "Prompt",
+    "PromptText",
     "PromptResult",
     # test case
     "TestCase",
@@ -39,7 +39,7 @@ __all__ = [
     "EvaluationRun",
     "EvaluationSummary",
     # optimization
-    "OptimizationState",
+    "Prompt",
     "OptimizationRun",
     "OptimizationStep",
     "OptimizationContext",

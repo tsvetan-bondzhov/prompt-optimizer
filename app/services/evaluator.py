@@ -1,4 +1,4 @@
-"""Prompt Evaluator service (Task 08).
+"""PromptText Evaluator service (Task 08).
 
 The :class:`EvaluatorService` runs a single prompt against a set of test cases,
 ``executions_per_test_case`` times each, applies the ordered user-supplied
@@ -42,7 +42,7 @@ from app.models import (
     EvaluationPoint,
     EvaluationReport,
     EvaluationRun,
-    Prompt,
+    PromptText,
     PromptEvaluation,
     PromptResult,
     TestCase,
@@ -108,11 +108,12 @@ class EvaluatorService:
 
     async def run(
         self,
-        prompt: Prompt,
+        prompt: PromptText,
         test_cases: Sequence[TestCase],
         executions_per_test_case: int,
         run_id: Optional[str] = None,
         progress: Optional[ProgressHook] = None,
+        prompt_name: Optional[str] = None,
     ) -> EvaluationRunResult:
         """Evaluate ``prompt`` over ``test_cases`` × ``executions_per_test_case``.
 
@@ -127,6 +128,8 @@ class EvaluatorService:
         :param run_id: Existing run id to link reports to. When ``None`` a new
             standalone :class:`EvaluationRun` is created and used.
         :param progress: Optional hook invoked with progress event dicts.
+        :param prompt_name: Name of the stored prompt being evaluated (if any);
+            persisted on the run and every report for display.
         :returns: An :class:`EvaluationRunResult` with all points, report ids,
             and the mean point score.
         :raises ValueError: If ``test_cases`` is empty or ``N < 1``.
@@ -154,6 +157,7 @@ class EvaluatorService:
             run_doc = await self._runs.create(
                 EvaluationRun(
                     prompt=prompt.text,
+                    prompt_name=prompt_name,
                     test_case_ids=[tc.id for tc in test_cases],
                     executions_per_test_case=executions_per_test_case,
                     status="running",
@@ -170,6 +174,7 @@ class EvaluatorService:
                 for execution_index in range(executions_per_test_case):
                     point, report_id, error = await self._evaluate_point(
                         prompt=prompt,
+                        prompt_name=prompt_name,
                         test_case=test_case,
                         execution_index=execution_index,
                         executor=executor,
@@ -244,7 +249,8 @@ class EvaluatorService:
     async def _evaluate_point(
         self,
         *,
-        prompt: Prompt,
+        prompt: PromptText,
+        prompt_name: Optional[str],
         test_case: TestCase,
         execution_index: int,
         executor: PromptExecutor,
@@ -284,6 +290,7 @@ class EvaluatorService:
             run_id=run_id,
             test_case_id=test_case.id,
             prompt=prompt.text,
+            prompt_name=prompt_name,
             prompt_result=result_text,
             score=aggregated_score,
             strengths=merged["strengths"],

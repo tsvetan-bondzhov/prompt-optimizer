@@ -92,6 +92,9 @@ class EvaluationReport(BaseModel):
     )
     test_case_id: str
     prompt: str = Field(..., description="The prompt text under evaluation.")
+    prompt_name: str | None = Field(
+        default=None, description="Name of the stored prompt, when one was used."
+    )
     prompt_result: str = Field(..., description="The execution output text.")
     score: float = Field(..., ge=1, le=10)
     strengths: list[str] = Field(default_factory=list)
@@ -111,6 +114,9 @@ class EvaluationRun(BaseModel):
     id: str = Field(default_factory=new_id)
     created_at: datetime = Field(default_factory=utcnow)
     prompt: str = Field(..., description="The prompt text evaluated by this run.")
+    prompt_name: str | None = Field(
+        default=None, description="Name of the stored prompt, when one was used."
+    )
     test_case_ids: list[str] = Field(default_factory=list)
     executions_per_test_case: int = Field(default=1, ge=1)
     avg_score: float | None = Field(

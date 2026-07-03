@@ -6,7 +6,7 @@ from app.db.repositories.reports import (
     EvaluationRunRepository,
 )
 from app.db.repositories.runs import OptimizationRunRepository
-from app.db.repositories.states import OptimizationStateRepository
+from app.db.repositories.prompts import PromptRepository
 from app.db.repositories.steps import OptimizationStepRepository
 from app.db.repositories.test_cases import TestCaseRepository
 
@@ -16,7 +16,7 @@ __all__ = [
     "to_doc",
     "from_doc",
     "TestCaseRepository",
-    "OptimizationStateRepository",
+    "PromptRepository",
     "OptimizationRunRepository",
     "OptimizationStepRepository",
     "EvaluationRunRepository",

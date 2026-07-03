@@ -31,7 +31,7 @@ from app.config import get_settings
 from app.core.interfaces import PromptExecutor
 from app.core.registry import register
 from app.implementations.prepare import prepare_graders
-from app.models import Prompt, PromptResult, TestCase
+from app.models import PromptText, PromptResult, TestCase
 
 __all__ = ["OllamaMistralExecutor", "OllamaExecutorError", "render_prompt_template"]
 
@@ -71,7 +71,7 @@ def render_prompt_template(template: str, data: dict[str, Any]) -> str:
 class OllamaMistralExecutor(PromptExecutor):
     """Executor that renders the prompt template and runs it via local Ollama."""
 
-    async def execute(self, prompt: Prompt, test_case: TestCase) -> PromptResult:
+    async def execute(self, prompt: PromptText, test_case: TestCase) -> PromptResult:
         """Render ``prompt`` with ``test_case.data`` and generate via Ollama."""
 
         settings = get_settings()

@@ -14,7 +14,7 @@ from app.core.interfaces import (
 from app.models import (
     EvaluationSummary,
     OptimizationContext,
-    Prompt,
+    PromptText,
     PromptEvaluation,
     PromptResult,
     TestCase,
@@ -27,7 +27,7 @@ class FakeExecutor(PromptExecutor):
     def __init__(self) -> None:
         self.calls: list[tuple[str, str]] = []
 
-    async def execute(self, prompt: Prompt, test_case: TestCase) -> PromptResult:
+    async def execute(self, prompt: PromptText, test_case: TestCase) -> PromptResult:
         self.calls.append((prompt.text, test_case.id))
         return PromptResult(text=f"result[{test_case.name}]: {prompt.text}")
 
@@ -73,11 +73,11 @@ class FakeOptimizer(PromptOptimizer):
         self._prompts = deque(prompts or [])
         self.calls = 0
 
-    async def optimize(self, ctx: OptimizationContext) -> Prompt:
+    async def optimize(self, ctx: OptimizationContext) -> PromptText:
         self.calls += 1
         if self._prompts:
-            return Prompt(text=self._prompts.popleft())
-        return Prompt(text=f"{ctx.current_prompt} [improved v{self.calls}]")
+            return PromptText(text=self._prompts.popleft())
+        return PromptText(text=f"{ctx.current_prompt} [improved v{self.calls}]")
 
 
 class FakeSummarizer(Summarizer):

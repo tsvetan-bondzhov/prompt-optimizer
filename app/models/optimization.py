@@ -1,11 +1,11 @@
 """Optimization models.
 
-Covers the persisted best state (:class:`OptimizationState`), a single loop
+Covers the persisted managed prompt (:class:`Prompt`), a single loop
 invocation (:class:`OptimizationRun`) with its config and progress, one
 iteration (:class:`OptimizationStep`), and the optimizer input
 (:class:`OptimizationContext`).
 
-Field names match :mod:`app.db.repositories.states`,
+Field names match :mod:`app.db.repositories.prompts`,
 :mod:`app.db.repositories.runs`, and :mod:`app.db.repositories.steps`.
 """
 
@@ -51,12 +51,13 @@ class RunConfig(BaseModel):
     )
 
 
-class OptimizationState(BaseModel):
-    """The current best state for a goal/project."""
+class Prompt(BaseModel):
+    """A managed prompt: name, goal, current best text, and latest summary."""
 
     model_config = ConfigDict(extra="forbid")
 
     id: str = Field(default_factory=new_id)
+    name: str = Field(..., min_length=1, description="Human-readable name.")
     goal: str = Field(..., min_length=1)
     current_prompt: str = Field(..., description="Current best prompt text.")
     avg_score: float | None = Field(default=None, ge=1, le=10)
@@ -85,7 +86,7 @@ class OptimizationRun(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: str = Field(default_factory=new_id)
-    state_id: str
+    prompt_id: str
     config: RunConfig = Field(default_factory=RunConfig)
     status: RunStatus = Field(default=RunStatus.PENDING)
     progress: RunProgress = Field(default_factory=RunProgress)

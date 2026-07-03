@@ -34,11 +34,11 @@ output text.
 # app/implementations/executor.py (or your own module)
 from app.core.interfaces import PromptExecutor
 from app.core.registry import register
-from app.models import Prompt, PromptResult, TestCase
+from app.models import PromptText, PromptResult, TestCase
 
 
 class MyExecutor(PromptExecutor):
-    async def execute(self, prompt: Prompt, test_case: TestCase) -> PromptResult:
+    async def execute(self, prompt: PromptText, test_case: TestCase) -> PromptResult:
         user_input = test_case.data.get("input", "")
         output = await my_backend_call(prompt.text, user_input)
         return PromptResult(text=output)
@@ -99,18 +99,18 @@ customize the *prompting*, not the transport:
 ```python
 from app.core.interfaces import PromptImprover
 from app.core.registry import get_llm_runner, register
-from app.models import ImprovementContext, Prompt
+from app.models import ImprovementContext, PromptText
 
 
 class MyImprover(PromptImprover):
-    async def improve(self, ctx: ImprovementContext) -> Prompt:
+    async def improve(self, ctx: ImprovementContext) -> PromptText:
         runner = get_llm_runner()
         text = await runner.run(
             ctx.system_prompt or "You improve prompts.",
             f"Goal: {ctx.goal}\nCurrent prompt:\n{ctx.current_prompt}\n"
             f"Score: {ctx.avg_score}\nWeaknesses: {ctx.weaknesses}",
         )
-        return Prompt(text=text.strip())
+        return PromptText(text=text.strip())
 
 
 register("improver", "mine", MyImprover)

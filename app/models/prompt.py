@@ -1,4 +1,4 @@
-"""Prompt-related value objects.
+"""PromptText-related value objects.
 
 These are small, JSON-serializable Pydantic v2 models shared across the
 evaluator, optimizer, and persistence layers.
@@ -9,7 +9,7 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class Prompt(BaseModel):
+class PromptText(BaseModel):
     """A prompt value object — the text fed to a :class:`PromptExecutor`."""
 
     model_config = ConfigDict(extra="forbid")

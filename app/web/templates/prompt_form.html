@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if prompt else 'New' }} Prompt — Prompt Optimizer{% endblock %}
+{% block content %}
+<h1>{{ 'Edit prompt' if prompt else 'New prompt' }}</h1>
+
+<form method="post" action="{{ '/prompts/' + prompt.id if prompt else '/prompts' }}" class="stacked">
+  <label>Name
+    <input type="text" name="name" required value="{{ prompt.name if prompt else '' }}"
+           placeholder="A short, unique name for this prompt">
+  </label>
+  <label>Goal
+    <input type="text" name="goal" required value="{{ prompt.goal if prompt else '' }}"
+           placeholder="What should the prompt achieve?">
+  </label>
+  <label>Current prompt
+    <textarea name="current_prompt" rows="10" required>{{ prompt.current_prompt if prompt else '' }}</textarea>
+  </label>
+  {% if prompt %}<p class="muted">Editing the prompt text resets the measured score — the next optimization run re-establishes a baseline.</p>{% endif %}
+  <fieldset>
+    <legend>Test cases</legend>
+    {% if test_cases %}
+      {% set linked = prompt.test_case_ids if prompt else [] %}
+      {% for tc in test_cases %}
+      <label class="check">
+        <input type="checkbox" name="test_case_ids" value="{{ tc.id }}"
+               {% if tc.id in linked %}checked{% endif %}>
+        {{ tc.name }}
+      </label>
+      {% endfor %}
+    {% else %}
+      <p class="muted">No test cases exist yet — <a href="/test-cases/new">create some</a> first.</p>
+    {% endif %}
+  </fieldset>
+  <div class="actions">
+    <button class="btn primary" type="submit">Save</button>
+    <a class="btn" href="{{ '/prompts/' + prompt.id if prompt else '/prompts' }}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

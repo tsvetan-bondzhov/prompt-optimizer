@@ -1,6 +1,6 @@
 """Server-rendered web UI routes (Task 14).
 
-Jinja2 pages for managing test cases and states, launching evaluation /
+Jinja2 pages for managing test cases and prompts, launching evaluation /
 optimization runs, watching live progress (SSE), and browsing reports. The
 routes reuse the same repositories/services and background executors as the
 JSON API — no business logic lives here.
@@ -22,7 +22,7 @@ from app.api.deps import (
     get_evaluation_run_repository,
     get_optimization_run_repository,
     get_report_repository,
-    get_state_repository,
+    get_prompt_repository,
     get_step_repository,
     get_test_case_repository,
 )
@@ -31,14 +31,14 @@ from app.db.repositories import (
     EvaluationReportRepository,
     EvaluationRunRepository,
     OptimizationRunRepository,
-    OptimizationStateRepository,
+    PromptRepository,
     OptimizationStepRepository,
     TestCaseRepository,
 )
 from app.models import (
     EvaluationRun,
     OptimizationRun,
-    OptimizationState,
+    Prompt,
     RunConfig,
     RunStatus,
     TestCase,
@@ -84,17 +84,17 @@ def _parse_json_field(raw: str, field: str) -> dict[str, Any]:
 @router.get("/", response_class=HTMLResponse)
 async def dashboard(
     request: Request,
-    states: OptimizationStateRepository = Depends(get_state_repository),
+    prompts: PromptRepository = Depends(get_prompt_repository),
     opt_runs: OptimizationRunRepository = Depends(get_optimization_run_repository),
     eval_runs: EvaluationRunRepository = Depends(get_evaluation_run_repository),
 ) -> HTMLResponse:
-    state_docs = await states.list(limit=50)
-    state_names = {s["id"]: s["goal"] for s in state_docs}
+    prompt_docs = await prompts.list(limit=50)
+    prompt_names = {s["id"]: s.get("name") or s["goal"] for s in prompt_docs}
     return _render(
         request,
         "dashboard.html",
-        states=state_docs,
-        state_names=state_names,
+        prompts=prompt_docs,
+        prompt_names=prompt_names,
         optimization_runs=await opt_runs.list(limit=10),
         evaluation_runs=await eval_runs.list(limit=10),
     )
@@ -205,90 +205,100 @@ async def test_case_delete(
 
 
 # --------------------------------------------------------------------------
-# States
+# Prompts
 # --------------------------------------------------------------------------
 
 
-@router.get("/states/new", response_class=HTMLResponse)
-async def state_new(
+@router.get("/prompts", response_class=HTMLResponse)
+async def prompts_page(
+    request: Request,
+    repo: PromptRepository = Depends(get_prompt_repository),
+) -> HTMLResponse:
+    return _render(request, "prompts.html", prompts=await repo.list(limit=500))
+
+
+@router.get("/prompts/new", response_class=HTMLResponse)
+async def prompt_new(
     request: Request,
     test_cases: TestCaseRepository = Depends(get_test_case_repository),
 ) -> HTMLResponse:
     return _render(
         request,
-        "state_form.html",
-        state=None,
+        "prompt_form.html",
+        prompt=None,
         test_cases=await test_cases.list(limit=500),
     )
 
 
-@router.post("/states")
-async def state_create(
+@router.post("/prompts")
+async def prompt_create(
     request: Request,
-    repo: OptimizationStateRepository = Depends(get_state_repository),
+    repo: PromptRepository = Depends(get_prompt_repository),
 ) -> RedirectResponse:
     form = await request.form()
-    state = OptimizationState(
+    prompt = Prompt(
+        name=str(form.get("name", "")).strip(),
         goal=str(form.get("goal", "")).strip(),
         current_prompt=str(form.get("current_prompt", "")),
         test_case_ids=[str(v) for v in form.getlist("test_case_ids")],
     )
-    await repo.create(state.model_dump())
+    await repo.create(prompt.model_dump())
     return RedirectResponse(
-        f"/states/{state.id}", status_code=status.HTTP_303_SEE_OTHER
+        f"/prompts/{prompt.id}", status_code=status.HTTP_303_SEE_OTHER
     )
 
 
-@router.get("/states/{state_id}", response_class=HTMLResponse)
-async def state_page(
+@router.get("/prompts/{prompt_id}", response_class=HTMLResponse)
+async def prompt_page(
     request: Request,
-    state_id: str,
-    repo: OptimizationStateRepository = Depends(get_state_repository),
+    prompt_id: str,
+    repo: PromptRepository = Depends(get_prompt_repository),
     test_cases: TestCaseRepository = Depends(get_test_case_repository),
     opt_runs: OptimizationRunRepository = Depends(get_optimization_run_repository),
 ) -> HTMLResponse:
-    state = await repo.get(state_id)
-    if state is None:
-        raise HTTPException(status_code=404, detail="State not found.")
-    linked = await test_cases.list_by_ids(state.get("test_case_ids") or [])
+    prompt = await repo.get(prompt_id)
+    if prompt is None:
+        raise HTTPException(status_code=404, detail="Prompt not found.")
+    linked = await test_cases.list_by_ids(prompt.get("test_case_ids") or [])
     return _render(
         request,
-        "state.html",
-        state=state,
+        "prompt_detail.html",
+        prompt=prompt,
         linked_test_cases=linked,
-        runs=await opt_runs.list_by_state(state_id, limit=20),
+        runs=await opt_runs.list_by_prompt(prompt_id, limit=20),
     )
 
 
-@router.get("/states/{state_id}/edit", response_class=HTMLResponse)
-async def state_edit(
+@router.get("/prompts/{prompt_id}/edit", response_class=HTMLResponse)
+async def prompt_edit(
     request: Request,
-    state_id: str,
-    repo: OptimizationStateRepository = Depends(get_state_repository),
+    prompt_id: str,
+    repo: PromptRepository = Depends(get_prompt_repository),
     test_cases: TestCaseRepository = Depends(get_test_case_repository),
 ) -> HTMLResponse:
-    state = await repo.get(state_id)
-    if state is None:
-        raise HTTPException(status_code=404, detail="State not found.")
+    prompt = await repo.get(prompt_id)
+    if prompt is None:
+        raise HTTPException(status_code=404, detail="Prompt not found.")
     return _render(
         request,
-        "state_form.html",
-        state=state,
+        "prompt_form.html",
+        prompt=prompt,
         test_cases=await test_cases.list(limit=500),
     )
 
 
-@router.post("/states/{state_id}")
-async def state_update(
+@router.post("/prompts/{prompt_id}")
+async def prompt_update(
     request: Request,
-    state_id: str,
-    repo: OptimizationStateRepository = Depends(get_state_repository),
+    prompt_id: str,
+    repo: PromptRepository = Depends(get_prompt_repository),
 ) -> RedirectResponse:
-    existing = await repo.get(state_id)
+    existing = await repo.get(prompt_id)
     if existing is None:
-        raise HTTPException(status_code=404, detail="State not found.")
+        raise HTTPException(status_code=404, detail="Prompt not found.")
     form = await request.form()
     changes: dict[str, Any] = {
+        "name": str(form.get("name", "")).strip(),
         "goal": str(form.get("goal", "")).strip(),
         "current_prompt": str(form.get("current_prompt", "")),
         "test_case_ids": [str(v) for v in form.getlist("test_case_ids")],
@@ -298,19 +308,19 @@ async def state_update(
         changes.update(
             {"avg_score": None, "strengths": [], "weaknesses": [], "reasoning": ""}
         )
-    await repo.update(state_id, changes)
+    await repo.update(prompt_id, changes)
     return RedirectResponse(
-        f"/states/{state_id}", status_code=status.HTTP_303_SEE_OTHER
+        f"/prompts/{prompt_id}", status_code=status.HTTP_303_SEE_OTHER
     )
 
 
-@router.post("/states/{state_id}/delete")
-async def state_delete(
-    state_id: str,
-    repo: OptimizationStateRepository = Depends(get_state_repository),
+@router.post("/prompts/{prompt_id}/delete")
+async def prompt_delete(
+    prompt_id: str,
+    repo: PromptRepository = Depends(get_prompt_repository),
 ) -> RedirectResponse:
-    await repo.delete(state_id)
-    return RedirectResponse("/", status_code=status.HTTP_303_SEE_OTHER)
+    await repo.delete(prompt_id)
+    return RedirectResponse("/prompts", status_code=status.HTTP_303_SEE_OTHER)
 
 
 # --------------------------------------------------------------------------
@@ -321,16 +331,16 @@ async def state_delete(
 @router.get("/evaluate", response_class=HTMLResponse)
 async def run_evaluation_form(
     request: Request,
-    state_id: Optional[str] = None,
+    prompt_id: Optional[str] = None,
     test_cases: TestCaseRepository = Depends(get_test_case_repository),
-    states: OptimizationStateRepository = Depends(get_state_repository),
+    prompts: PromptRepository = Depends(get_prompt_repository),
 ) -> HTMLResponse:
     return _render(
         request,
         "run_evaluation.html",
         test_cases=await test_cases.list(limit=500),
-        states=await states.list(limit=100),
-        selected_state_id=state_id,
+        prompts=await prompts.list(limit=100),
+        selected_prompt_id=prompt_id,
     )
 
 
@@ -340,31 +350,34 @@ async def run_evaluation_submit(
     background_tasks: BackgroundTasks,
     runs: EvaluationRunRepository = Depends(get_evaluation_run_repository),
     test_case_repo: TestCaseRepository = Depends(get_test_case_repository),
-    states: OptimizationStateRepository = Depends(get_state_repository),
+    prompts: PromptRepository = Depends(get_prompt_repository),
 ) -> RedirectResponse:
     form = await request.form()
     prompt_text = str(form.get("prompt", "")).strip()
-    state_id = str(form.get("state_id", "")).strip()
+    prompt_id = str(form.get("prompt_id", "")).strip()
+    prompt_name: Optional[str] = None
     test_case_ids = [str(v) for v in form.getlist("test_case_ids")]
     n = max(1, int(form.get("executions_per_test_case", 1) or 1))
 
-    if state_id:
-        state = await states.get(state_id)
-        if state is None:
-            raise HTTPException(status_code=400, detail="State not found.")
+    if prompt_id:
+        prompt = await prompts.get(prompt_id)
+        if prompt is None:
+            raise HTTPException(status_code=400, detail="Prompt not found.")
+        prompt_name = prompt.get("name")
         if not prompt_text:
-            prompt_text = state.get("current_prompt") or ""
+            prompt_text = prompt.get("current_prompt") or ""
         if not test_case_ids:
-            test_case_ids = list(state.get("test_case_ids") or [])
+            test_case_ids = list(prompt.get("test_case_ids") or [])
 
     if not prompt_text:
         raise HTTPException(
-            status_code=400, detail="Provide a prompt or select a state."
+            status_code=400, detail="Provide a prompt or select a prompt."
         )
     selected = await resolve_test_cases(test_case_ids, test_case_repo)
 
     run = EvaluationRun(
         prompt=prompt_text,
+        prompt_name=prompt_name,
         test_case_ids=[tc.id for tc in selected],
         executions_per_test_case=n,
         status=RunStatus.PENDING.value,
@@ -378,6 +391,7 @@ async def run_evaluation_submit(
         prompt_text,
         selected,
         n,
+        prompt_name,
     )
     return RedirectResponse(
         f"/runs/{run.id}", status_code=status.HTTP_303_SEE_OTHER
@@ -387,14 +401,14 @@ async def run_evaluation_submit(
 @router.get("/optimize", response_class=HTMLResponse)
 async def run_optimization_form(
     request: Request,
-    state_id: Optional[str] = None,
-    states: OptimizationStateRepository = Depends(get_state_repository),
+    prompt_id: Optional[str] = None,
+    prompts: PromptRepository = Depends(get_prompt_repository),
 ) -> HTMLResponse:
     return _render(
         request,
         "run_optimization.html",
-        states=await states.list(limit=100),
-        selected_state_id=state_id,
+        prompts=await prompts.list(limit=100),
+        selected_prompt_id=prompt_id,
         defaults=RunConfig(),
     )
 
@@ -404,17 +418,17 @@ async def run_optimization_submit(
     request: Request,
     background_tasks: BackgroundTasks,
     runs: OptimizationRunRepository = Depends(get_optimization_run_repository),
-    states: OptimizationStateRepository = Depends(get_state_repository),
+    prompts: PromptRepository = Depends(get_prompt_repository),
 ) -> RedirectResponse:
     form = await request.form()
-    state_id = str(form.get("state_id", "")).strip()
-    state = await states.get(state_id)
-    if state is None:
-        raise HTTPException(status_code=400, detail="State not found.")
-    if not state.get("test_case_ids"):
+    prompt_id = str(form.get("prompt_id", "")).strip()
+    prompt = await prompts.get(prompt_id)
+    if prompt is None:
+        raise HTTPException(status_code=400, detail="Prompt not found.")
+    if not prompt.get("test_case_ids"):
         raise HTTPException(
             status_code=400,
-            detail="The selected state has no linked test cases.",
+            detail="The selected prompt has no linked test cases.",
         )
     config = RunConfig(
         target_score=float(form.get("target_score") or RunConfig().target_score),
@@ -426,7 +440,7 @@ async def run_optimization_submit(
     )
 
     run = OptimizationRun(
-        state_id=state_id, config=config, status=RunStatus.PENDING
+        prompt_id=prompt_id, config=config, status=RunStatus.PENDING
     )
     await runs.create(run.model_dump())
     background_tasks.add_task(
@@ -434,7 +448,7 @@ async def run_optimization_submit(
         request.app.state.db,
         request.app.state.progress_tracker,
         run.id,
-        state_id,
+        prompt_id,
         config,
     )
     return RedirectResponse(

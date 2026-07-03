@@ -23,11 +23,11 @@ from app.db.repositories import (
     EvaluationReportRepository,
     EvaluationRunRepository,
     OptimizationRunRepository,
-    OptimizationStateRepository,
+    PromptRepository,
     OptimizationStepRepository,
     TestCaseRepository,
 )
-from app.models import Prompt, RunConfig, RunStatus, TestCase
+from app.models import PromptText, RunConfig, RunStatus, TestCase
 from app.services.evaluator import EvaluatorService
 from app.services.optimizer import OptimizerService
 from app.services.progress import ProgressTracker
@@ -45,6 +45,7 @@ async def execute_evaluation_run(
     prompt_text: str,
     test_cases: list[TestCase],
     executions_per_test_case: int,
+    prompt_name: str | None = None,
 ) -> None:
     """Execute a standalone evaluation for a pre-created (``pending``) run.
 
@@ -59,11 +60,12 @@ async def execute_evaluation_run(
     try:
         await runs.update(run_id, {"status": RunStatus.RUNNING.value})
         result = await evaluator.run(
-            Prompt(text=prompt_text),
+            PromptText(text=prompt_text),
             test_cases,
             executions_per_test_case,
             run_id=run_id,
             progress=tracker.make_hook(run_id),
+            prompt_name=prompt_name,
         )
         await runs.update(
             run_id,
@@ -85,7 +87,7 @@ async def execute_optimization_run(
     db: AsyncIOMotorDatabase,
     tracker: ProgressTracker,
     run_id: str,
-    state_id: str,
+    prompt_id: str,
     config: RunConfig,
 ) -> None:
     """Execute the optimization loop for a pre-created (``pending``) run.
@@ -100,7 +102,7 @@ async def execute_optimization_run(
             EvaluationReportRepository(db), EvaluationRunRepository(db)
         ),
         SummarizerService(),
-        OptimizationStateRepository(db),
+        PromptRepository(db),
         OptimizationRunRepository(db),
         OptimizationStepRepository(db),
         TestCaseRepository(db),
@@ -109,7 +111,7 @@ async def execute_optimization_run(
     )
 
     try:
-        await optimizer.optimize(state_id, config, run_id=run_id)
+        await optimizer.optimize(prompt_id, config, run_id=run_id)
     except Exception:  # noqa: BLE001 - already recorded by the optimizer
         logger.exception("Optimization run %s failed", run_id)
 

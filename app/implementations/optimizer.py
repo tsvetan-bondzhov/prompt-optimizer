@@ -8,7 +8,7 @@ strengths/weaknesses, average score, reasoning, and a system prompt).
 the *active* :class:`~app.core.interfaces.LLMRunner` (``ACTIVE_LLM_RUNNER``) with
 the context's ``system_prompt`` (falling back to
 ``Settings.OPTIMIZER_SYSTEM_PROMPT``), and returns the model's response text as
-the improved :class:`Prompt`.
+the improved :class:`PromptText`.
 
 It registers itself on import under both ``("optimizer", "claude_code")`` (the
 default ``ACTIVE_OPTIMIZER``) and ``("optimizer", "default")`` so that resolution
@@ -23,7 +23,7 @@ import logging
 from app.config import get_settings
 from app.core.interfaces import PromptOptimizer
 from app.core.registry import get_llm_runner, register
-from app.models import OptimizationContext, Prompt
+from app.models import OptimizationContext, PromptText
 
 __all__ = ["LLMOptimizer"]
 
@@ -33,12 +33,12 @@ logger = logging.getLogger(__name__)
 class LLMOptimizer(PromptOptimizer):
     """LLM-backed optimizer that proposes a new prompt from optimizer context."""
 
-    async def optimize(self, ctx: OptimizationContext) -> Prompt:
+    async def optimize(self, ctx: OptimizationContext) -> PromptText:
         """Propose an improved prompt for ``ctx`` via the active LLM runner.
 
         :param ctx: The current optimization context (goal, current prompt,
             strengths, weaknesses, average score, reasoning, system prompt).
-        :returns: A :class:`Prompt` holding the improved prompt text.
+        :returns: A :class:`PromptText` holding the improved prompt text.
         :raises Exception: Propagates any error from the active LLM runner so the
             optimizer can mark the run failed and persist partial results.
         """
@@ -52,7 +52,7 @@ class LLMOptimizer(PromptOptimizer):
         if not text:
             # Never propose an empty prompt; keep the loop progressing safely.
             text = ctx.current_prompt
-        return Prompt(text=text)
+        return PromptText(text=text)
 
     @staticmethod
     def _compose_user_prompt(ctx: OptimizationContext) -> str:

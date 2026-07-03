@@ -6,7 +6,7 @@
   <div class="actions">
     {% if kind == 'optimization' %}
     <a class="btn" href="/optimizations/{{ run_id }}/steps">View steps</a>
-    <a class="btn" href="/states/{{ run.state_id }}">Back to state</a>
+    <a class="btn" href="/prompts/{{ run.prompt_id }}">Back to prompt</a>
     {% else %}
     <a class="btn" href="/evaluations/{{ run_id }}/reports">View reports</a>
     {% endif %}

@@ -15,7 +15,7 @@
        · {{ run.executions_per_test_case }}× per test case</p>
   </div>
   <div class="card">
-    <h3>Prompt</h3>
+    <h3>Prompt{% if run.prompt_name %} � {{ run.prompt_name }}{% endif %}</h3>
     <pre class="prompt small">{{ run.prompt }}</pre>
   </div>
 </div>

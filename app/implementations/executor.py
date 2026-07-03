@@ -22,7 +22,7 @@ from typing import Any
 
 from app.core.interfaces import PromptExecutor
 from app.core.registry import get_llm_runner, register
-from app.models import Prompt, PromptResult, TestCase
+from app.models import PromptText, PromptResult, TestCase
 
 __all__ = ["ReferencePromptExecutor", "render_test_case_input"]
 
@@ -49,7 +49,7 @@ class ReferencePromptExecutor(PromptExecutor):
     :class:`LLMRunner`. Swap the marked line for your own target invocation.
     """
 
-    async def execute(self, prompt: Prompt, test_case: TestCase) -> PromptResult:
+    async def execute(self, prompt: PromptText, test_case: TestCase) -> PromptResult:
         """Run ``prompt`` against ``test_case`` and return its output."""
 
         system_prompt = prompt.text

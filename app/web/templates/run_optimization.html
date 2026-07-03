@@ -2,15 +2,15 @@
 {% block title %}Run Optimization — Prompt Optimizer{% endblock %}
 {% block content %}
 <h1>Run an optimization loop</h1>
-<p class="muted">Iteratively improves the state's prompt until the target score is reached or the iteration budget is exhausted.</p>
+<p class="muted">Iteratively improves the prompt until the target score is reached or the iteration budget is exhausted.</p>
 
 <form method="post" action="/optimize" class="stacked">
-  <label>State
-    <select name="state_id" required>
-      <option value="" disabled {% if not selected_state_id %}selected{% endif %}>— pick a state —</option>
-      {% for s in states %}
-      <option value="{{ s.id }}" {% if s.id == selected_state_id %}selected{% endif %}>
-        {{ s.goal }}{% if s.avg_score is not none %} (score {{ '%.2f'|format(s.avg_score) }}){% endif %}
+  <label>Prompt
+    <select name="prompt_id" required>
+      <option value="" disabled {% if not selected_prompt_id %}selected{% endif %}>— pick a prompt —</option>
+      {% for s in prompts %}
+      <option value="{{ s.id }}" {% if s.id == selected_prompt_id %}selected{% endif %}>
+        {{ s.name }}{% if s.avg_score is not none %} (score {{ '%.2f'|format(s.avg_score) }}){% endif %}
       </option>
       {% endfor %}
     </select>

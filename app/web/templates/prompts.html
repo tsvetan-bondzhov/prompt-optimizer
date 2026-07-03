@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Prompts — Prompt Optimizer{% endblock %}
+{% block content %}
+<div class="section-head">
+  <h1>Prompts</h1>
+  <a class="btn" href="/prompts/new">＋ New prompt</a>
+</div>
+
+{% if prompts %}
+<table>
+  <thead><tr><th>Name</th><th>Goal</th><th>Avg score</th><th>Test cases</th><th>Updated</th><th></th></tr></thead>
+  <tbody>
+    {% for p in prompts %}
+    <tr>
+      <td><a href="/prompts/{{ p.id }}">{{ p.name or p.goal }}</a></td>
+      <td class="truncate">{{ p.goal }}</td>
+      <td>{% if p.avg_score is not none %}<span class="score">{{ '%.2f'|format(p.avg_score) }}</span>{% else %}<span class="muted">no baseline</span>{% endif %}</td>
+      <td>{{ (p.test_case_ids or [])|length }}</td>
+      <td class="muted">{{ p.updated_at }}</td>
+      <td class="actions">
+        <a class="btn small" href="/prompts/{{ p.id }}/edit">Edit</a>
+        <form method="post" action="/prompts/{{ p.id }}/delete" class="inline"
+              onsubmit="return confirm('Delete prompt {{ p.name }}?');">
+          <button class="btn small danger" type="submit">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">No prompts yet. <a href="/prompts/new">Create one</a> to get started.</p>
+{% endif %}
+{% endblock %}

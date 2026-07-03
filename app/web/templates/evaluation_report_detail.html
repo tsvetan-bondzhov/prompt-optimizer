@@ -20,7 +20,7 @@
 </div>
 
 <section>
-  <h2>Prompt</h2>
+  <h2>Prompt{% if report.prompt_name %} — {{ report.prompt_name }}{% endif %}</h2>
   <pre class="prompt">{{ report.prompt }}</pre>
 </section>
 
