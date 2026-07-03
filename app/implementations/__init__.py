@@ -15,6 +15,7 @@ from app.implementations import (  # noqa: F401
     executor,
     graders,
     json_graders,
+    model_grader,
     template_executor,
 )
 
@@ -22,5 +23,6 @@ __all__ = [
     "executor",
     "graders",
     "json_graders",
+    "model_grader",
     "template_executor",
 ]
