@@ -8,103 +8,141 @@ Every pluggable seam follows the same three-step pattern:
    Do it at import time in your module and make sure the module is imported
    from `app/core/bootstrap.py::register_builtins()` (or from
    `app/implementations/__init__.py`, which the bootstrap imports).
-3. Point the matching `ACTIVE_*` setting at your name (env var or `.env`).
+3. Select the implementation — most seams are now chosen **per test case /
+   per prompt in the UI**; the `ACTIVE_*` settings only provide the defaults.
 
-Registry categories → settings:
+Registry categories:
 
-| Category | ABC / protocol | Setting |
-|----------|----------------|---------|
-| `executor` | `PromptExecutor` | `ACTIVE_EXECUTOR` |
-| `evaluation_prepare` | `prepare_evaluation()` factory | `ACTIVE_EXECUTOR` (paired) |
-| `improver` | `PromptImprover` | `ACTIVE_IMPROVER` |
+| Category | ABC / protocol | Selected by |
+|----------|----------------|-------------|
+| `executor` | `PromptExecutor` | per test case (`executor_name`); default `ACTIVE_EXECUTOR` |
+| `grader` | `Grader` | per test case (`grader_names` checkboxes) |
+| `optimizer` | `PromptOptimizer` | `ACTIVE_OPTIMIZER` |
 | `summarizer` | `Summarizer` | `ACTIVE_SUMMARIZER` |
-| `llm_runner` | `LLMRunner` | `ACTIVE_LLM_RUNNER` |
+| `llm_runner` | `LLMRunner` | per test case (`executor_llm_runner`, `summarizer_llm_runner`) and per prompt (`optimizer_llm_runner`); default `ACTIVE_LLM_RUNNER` |
 | `aggregator` | `Aggregator` (callable) | — (default: mean) |
-
-> The evaluation-steps factory is resolved with the **executor's** name because
-> the executor and its evaluation steps form a matched, user-supplied pair.
 
 ## 1. Implement a `PromptExecutor`
 
-The executor defines what "running the prompt" means — an LLM call, a tool
-invocation, an HTTP request, anything that turns `(prompt, test_case)` into
-output text.
+The executor defines what "running the prompt" means. A test case's `data` is
+an **array of entries**; the executor is invoked once per entry. Executors do
+not talk to a provider directly — they receive the `LLMRunner` selected on the
+test case (`executor_llm_runner`) and delegate the actual LLM call to it
+(executors that don't need an LLM may ignore it).
 
 ```python
 # app/implementations/executor.py (or your own module)
-from app.core.interfaces import PromptExecutor
+from app.core.interfaces import LLMRunner, PromptExecutor
 from app.core.registry import register
-from app.models import PromptText, PromptResult, TestCase
+from app.models import PromptResult, PromptText, TestCase
 
 
 class MyExecutor(PromptExecutor):
-    async def execute(self, prompt: PromptText, test_case: TestCase) -> PromptResult:
-        user_input = test_case.data.get("input", "")
-        output = await my_backend_call(prompt.text, user_input)
+    async def execute(
+        self,
+        prompt: PromptText,
+        test_case: TestCase,
+        entry: dict,
+        llm_runner: LLMRunner,
+    ) -> PromptResult:
+        user_input = entry.get("input", "")
+        output = await llm_runner.run(prompt.text, user_input)
         return PromptResult(text=output)
 
 
 register("executor", "mine", MyExecutor)
 ```
 
-Activate with `ACTIVE_EXECUTOR=mine`.
+Once registered, `mine` appears as a radio button in the test case form.
 
-## 2. Implement `EvaluationStep`s and `prepare_evaluation()`
+Built-in executors:
 
-Evaluation steps score a `PromptResult` against a test case's
-`evaluation_criteria`. **There is no built-in LLM call** — the scoring logic is
-entirely yours (deterministic checks, an LLM judge you wire yourself, etc.).
-Each step must return a validated `PromptEvaluation`: 1–3 strengths, 1–3
-weaknesses, non-empty reasoning, integer score 1–10.
+- `default` — treats `prompt.text` as the system prompt and the pretty-printed
+  entry as the user prompt.
+- `template` — renders `{placeholder}` tokens in the prompt from the entry's
+  fields (`\{` / `\}` escape literal braces), then sends the rendered prompt
+  through the selected runner. (This is the former `OllamaMistralExecutor`;
+  the Ollama transport now lives in the `ollama` LLM runner.)
+
+## 2. Implement a `Grader`
+
+Graders score a `PromptResult`. They are selected **per test case** via
+checkboxes (`TestCase.grader_names`). A grader is invoked once per data entry;
+use `self.criteria_for(test_case, entry_index)` to read the evaluation
+criteria — it returns the per-entry criteria
+(`evaluation_criteria_per_entry[entry_index]`) when present and falls back to
+the dataset-level `evaluation_criteria` otherwise. Each grader must return a
+validated `PromptEvaluation`: 1–3 strengths, 1–3 weaknesses, non-empty
+reasoning, integer score 1–10.
 
 ```python
-from app.core.interfaces import EvaluationStep
+from app.core.interfaces import Grader
 from app.core.registry import register
 from app.models import PromptEvaluation, PromptResult, TestCase
 
 
-class ContainsAnswerStep(EvaluationStep):
+class ContainsAnswerGrader(Grader):
     name = "contains-answer"
 
-    async def evaluate(
-        self, result: PromptResult, test_case: TestCase
+    async def grade(
+        self,
+        result: PromptResult,
+        test_case: TestCase,
+        entry_index: int = 0,
     ) -> PromptEvaluation:
-        expected = test_case.evaluation_criteria.get("expected", "")
+        criteria = self.criteria_for(test_case, entry_index)
+        expected = criteria.get("expected", "")
         hit = expected.lower() in result.text.lower()
         return PromptEvaluation(
             strengths=["contains the expected answer" if hit else "produced output"],
             weaknesses=["nothing notable" if hit else "expected answer missing"],
             reasoning=f"Checked for {expected!r} in the result.",
             score=9 if hit else 3,
-            step_name=self.name,
+            grader_name=self.name,
         )
 
 
-def prepare_evaluation() -> list[EvaluationStep]:
-    # Ordered — steps run sequentially per evaluation point.
-    return [ContainsAnswerStep()]
-
-
-register("evaluation_prepare", "mine", prepare_evaluation)
+register("grader", ContainsAnswerGrader.name, ContainsAnswerGrader)
 ```
 
-Reference examples ship in `app/implementations/evaluation_steps.py` and
-`app/implementations/prepare.py` (registered as `default`).
+Built-in graders: `keyword_coverage`, `response_quality`
+(`app/implementations/graders.py`), `json_schema`, `json_expected_match`
+(`app/implementations/json_graders.py`), and `model_grader`
+(`app/implementations/model_grader.py`).
 
-## 3. Implement a `PromptImprover` or `Summarizer`
+### The model grader (LLM-as-judge)
 
-Both default implementations delegate to the active `LLMRunner`, so usually you
-customize the *prompting*, not the transport:
+`model_grader` asks an LLM to judge the result. Configure it entirely through
+the evaluation criteria (per entry or dataset-level):
+
+```json
+{
+    "evaluation_prompt": "Judge whether the answer is factually correct.",
+    "llm_runner": "ollama"
+}
+```
+
+The judge must answer with `{"score": 1-10, "strengths": [...],
+"weaknesses": [...], "reasoning": "..."}`; failures score 1 and are recorded
+in the evaluation.
+
+## 3. Implement a `PromptOptimizer` or `Summarizer`
+
+Both default implementations delegate to an `LLMRunner`, so usually you
+customize the *prompting*, not the transport. The optimizer uses the runner
+selected on the prompt (`Prompt.optimizer_llm_runner`, exposed through
+`OptimizationContext.llm_runner_name`); the summarizer receives the runner
+selected on the test case (`summarizer_llm_runner`).
 
 ```python
-from app.core.interfaces import PromptImprover
+from app.core.interfaces import PromptOptimizer
 from app.core.registry import get_llm_runner, register
-from app.models import ImprovementContext, PromptText
+from app.models import OptimizationContext, PromptText
 
 
-class MyImprover(PromptImprover):
-    async def improve(self, ctx: ImprovementContext) -> PromptText:
-        runner = get_llm_runner()
+class MyOptimizer(PromptOptimizer):
+    async def optimize(self, ctx: OptimizationContext) -> PromptText:
+        runner = get_llm_runner(ctx.llm_runner_name)
         text = await runner.run(
             ctx.system_prompt or "You improve prompts.",
             f"Goal: {ctx.goal}\nCurrent prompt:\n{ctx.current_prompt}\n"
@@ -113,25 +151,25 @@ class MyImprover(PromptImprover):
         return PromptText(text=text.strip())
 
 
-register("improver", "mine", MyImprover)
+register("optimizer", "mine", MyOptimizer)
 ```
 
-Activate with `ACTIVE_IMPROVER=mine`. Summarizers are analogous
-(`Summarizer.summarize(list[PromptEvaluation]) -> EvaluationSummary`); see
-`app/implementations/summarizer.py` for the LLM-backed `default` and the
-deterministic `frequency` fallback.
+Activate with `ACTIVE_OPTIMIZER=mine`. Summarizers are analogous
+(`Summarizer.summarize(list[PromptEvaluation], llm_runner=None) ->
+EvaluationSummary`); see `app/implementations/summarizer.py` for the
+LLM-backed `default` and the deterministic `frequency` fallback.
 
-### The improver system prompt
+### The optimizer system prompt
 
 The default system prompt lives in `app/config.py` as
-`DEFAULT_IMPROVER_SYSTEM_PROMPT` — edit the constant, or override it per
-deployment with the `IMPROVER_SYSTEM_PROMPT` environment variable.
+`DEFAULT_OPTIMIZER_SYSTEM_PROMPT` — edit the constant, or override it per
+deployment with the `OPTIMIZER_SYSTEM_PROMPT` environment variable.
 
-## 4. Add a new `LLMRunner` (swap away from Claude Code)
+## 4. Add a new `LLMRunner`
 
-The optimizer/summarizer talk to LLMs only through this one-method interface,
-so switching from Claude Code headless to Cursor, Copilot, or the Anthropic API
-means implementing one class:
+Executors, the optimizer, the summarizer, and the model grader all talk to
+LLMs only through this one-method interface. New runners immediately become
+selectable in the test case and prompt forms:
 
 ```python
 from app.core.registry import register
@@ -155,16 +193,18 @@ class AnthropicAPIRunner(LLMRunner):
 register("llm_runner", "anthropic_api", AnthropicAPIRunner)
 ```
 
-Activate with `ACTIVE_LLM_RUNNER=anthropic_api`. Raise `LLMRunnerError` on
-failure so runs are marked `failed` with the error preserved.
+Raise `LLMRunnerError` on failure so runs are marked `failed` with the error
+preserved.
 
 Built-in runners: `claude_code` (headless `claude -p` subprocess, path via
-`CLAUDE_CLI_PATH`) and `fake` (deterministic echo, offline).
+`CLAUDE_CLI_PATH`), `ollama` (local Ollama server via `OLLAMA_*` settings),
+and `fake` (deterministic echo, offline).
 
 ## 5. Custom aggregation
 
-The per-point score defaults to the mean of step scores. Register a callable
-under `("aggregator", "default")` to change the strategy:
+The per-entry score defaults to the mean of the grader scores (and the point
+score to the mean over entries). Register a callable under
+`("aggregator", "default")` to change the per-entry strategy:
 
 ```python
 register("aggregator", "default", lambda: lambda evals: min(e.score for e in evals))
@@ -174,5 +214,5 @@ register("aggregator", "default", lambda: lambda evals: min(e.score for e in eva
 
 Use the fixtures in `tests/conftest.py` as a template: a fresh
 `mongomock-motor` database per test, and `register(...)` overwrites to shadow
-the active names with your implementation. The whole suite runs with
-`pytest` — no network or LLM access required.
+registered names with fakes (e.g. the `fake` grader). The whole suite runs
+with `pytest` — no network or LLM access required.

@@ -1,27 +1,30 @@
 # Prompt Optimizer
 
 A modular, extensible **prompt optimization framework**. Plug in your own
-prompt-execution and prompt-evaluation logic, then let the framework iterate on
-a prompt until it best satisfies a stated goal across a set of test cases.
+prompt-execution and grading logic, then let the framework iterate on a
+prompt until it best satisfies a stated goal across a set of test cases.
 
 Two core modules:
 
-1. **Prompt Evaluator** — runs an ordered list of user-supplied evaluation
-   steps against every `(prompt, test case)` pair, `N` times each. Each step
-   returns a structured `PromptEvaluation` (strengths, weaknesses, reasoning,
-   score 1–10); per-point scores are aggregated (default: mean) and persisted
-   as evaluation reports.
+1. **Prompt Evaluator** — runs a prompt against every test case, `N` times
+   each. A test case's `data` is an **array of entries**: each entry is
+   executed individually by the test case's executor and graded by the test
+   case's selected **graders**; each grader returns a structured
+   `PromptEvaluation` (strengths, weaknesses, reasoning, score 1–10). The
+   entry scores are aggregated (default: mean) into the test case score and
+   persisted as evaluation reports.
 2. **Prompt Optimizer** — a feedback loop that asks an LLM for an improved
    prompt, re-evaluates it over all test cases, summarizes the results, and
    accepts the proposal only when its average score is **strictly greater**
    than the current best. It stops when the target score is reached or the
    iteration budget is exhausted.
 
-A **FastAPI + Jinja2 web UI** manages states and test cases, runs standalone
+A **FastAPI + Jinja2 web UI** manages prompts and test cases, runs standalone
 evaluations and optimization loops, and shows **live progress via Server-Sent
 Events**. This is an internal tool — there is no authentication.
 
-Architecture details: [Documents/Implementation/IMPLEMENTATION_PLAN.md](Documents/Implementation/IMPLEMENTATION_PLAN.md).
+Architecture details: [Documents/Implementation/IMPLEMENTATION_PLAN.md](Documents/Implementation/IMPLEMENTATION_PLAN.md)
+(historical plan — it predates the grader/prompt terminology).
 Extension guide: [docs/EXTENDING.md](docs/EXTENDING.md).
 
 ## Quick start
@@ -56,23 +59,35 @@ The suite runs entirely offline (mongomock + deterministic fakes; no LLM calls).
 
 ## Using the UI
 
-1. **Test cases** (`/test-cases`) — create test cases with a `data` JSON object
-   (inputs handed to your executor) and an `evaluation_criteria` JSON object
-   (whatever your evaluation steps need to score a result). Bulk JSON import is
-   supported.
-2. **State** (`/states/new`) — create an optimization state: the goal, the
-   current prompt, and the linked test cases. The state tracks the best prompt
-   found so far, its average score, and the latest strengths/weaknesses
-   summary.
-3. **Run a standalone evaluation** (`/evaluate`) — pick a prompt (or a state's
-   current prompt), test cases, and `executions per test case`; the run page
-   shows live progress and links to the produced evaluation reports (date, test
-   case, prompt, result, score, strengths, weaknesses, reasoning).
-4. **Run an optimization loop** (`/optimize`) — pick a state plus a target
+1. **Test cases** (`/test-cases`) — create test cases with:
+   - `data`: a JSON **array** of entry objects; each entry is executed and
+     graded individually (the test case score is the average over entries);
+   - `evaluation criteria per data entry`: a JSON array aligned by index with
+     `data`;
+   - `evaluation criteria for dataset`: a JSON object used as the fallback
+     when an entry has no criteria of its own;
+   - **graders**: checkboxes selecting which registered graders run
+     (`keyword_coverage`, `response_quality`, `json_schema`,
+     `json_expected_match`, `model_grader`, …);
+   - **executor**: radio buttons selecting how the prompt is run (`default`,
+     `template`, …), plus the **LLM runner** the executor delegates to and
+     the LLM runner used for summarization.
+   Bulk JSON import is supported.
+2. **Prompts** (`/prompts`) — the prompt management page: create, edit, and
+   delete prompts. A prompt has a **name** (shown in reports and tables), a
+   goal, the current prompt text, linked test cases, and the LLM runner used
+   by the optimizer. The prompt tracks the best text found so far, its
+   average score, and the latest strengths/weaknesses summary.
+3. **Run a standalone evaluation** (`/evaluate`) — pick a prompt (or paste
+   prompt text), test cases, and `executions per test case`; the run page
+   shows live progress and links to the produced evaluation reports (date,
+   test case, prompt name, result, score, strengths, weaknesses, reasoning,
+   per-entry results).
+4. **Run an optimization loop** (`/optimize`) — pick a prompt plus a target
    score / max iterations / executions per test case. Every iteration persists
    an optimization step (previous & proposed prompt, previous & new average
    score, summary, links to all evaluation reports) whether accepted or
-   rejected. The state only advances on a strictly better score.
+   rejected. The prompt only advances on a strictly better score.
 5. **Progress** (`/runs/{run_id}`) — live SSE progress; reloading the page
    rebuilds the report from persisted progress.
 
@@ -88,16 +103,18 @@ Settings load from environment variables or `.env`
 |---------|---------|---------|
 | `MONGO_URI` | `mongodb://mongo:27017` | Mongo connection |
 | `MONGO_DB` | `prompt_optimizer` | Database name |
-| `ACTIVE_EXECUTOR` | `default` | Registry key for the `PromptExecutor` |
-| `ACTIVE_IMPROVER` | `claude_code` | Registry key for the `PromptImprover` |
+| `ACTIVE_EXECUTOR` | `default` | Default `PromptExecutor` (test cases select their own) |
+| `ACTIVE_OPTIMIZER` | `claude_code` | Registry key for the `PromptOptimizer` |
 | `ACTIVE_SUMMARIZER` | `default` | Registry key for the `Summarizer` |
-| `ACTIVE_LLM_RUNNER` | `claude_code` | Registry key for the `LLMRunner` |
+| `ACTIVE_LLM_RUNNER` | `claude_code` | Default `LLMRunner` (test cases / prompts select their own) |
 | `CLAUDE_CLI_PATH` | `claude` | Path to the Claude Code CLI |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server for the `ollama` runner |
+| `OLLAMA_MODEL` | `mistral` | Model used by the `ollama` runner |
 | `DEFAULT_EXECUTIONS_PER_TEST_CASE` | `1` | Default N |
 | `DEFAULT_TARGET_SCORE` | `9.0` | Loop stop threshold |
 | `DEFAULT_MAX_ITERATIONS` | `10` | Loop stop limit |
-| `IMPROVER_SYSTEM_PROMPT` | built-in constant | Optimizer system prompt |
-| `JSON_EVAL_ALLOW_MARKDOWN` | `false` | Let the JSON evaluation steps accept Markdown-fenced output |
+| `OPTIMIZER_SYSTEM_PROMPT` | built-in constant | Optimizer system prompt |
+| `JSON_EVAL_ALLOW_MARKDOWN` | `false` | Let the JSON graders accept Markdown-fenced output |
 | `LOG_LEVEL` | `INFO` | Logging level |
 
 Set `ACTIVE_LLM_RUNNER=fake` for fully offline operation (deterministic echo
@@ -105,15 +122,19 @@ runner — useful for demos and development without the Claude CLI).
 
 ## Extending
 
-Every seam is a registered implementation selected by name through the
-`ACTIVE_*` settings:
+Every seam is a registered implementation selected by name — per test case /
+per prompt in the UI, or through the `ACTIVE_*` defaults:
 
-- **`PromptExecutor`** — what "running the prompt" means for your use case.
-- **`EvaluationStep` + `prepare_evaluation()`** — your scoring logic (no
-  built-in LLM call; you own it).
-- **`PromptImprover` / `Summarizer`** — LLM-backed by default, swappable.
-- **`LLMRunner`** — the default runs Claude Code headless (`claude -p`);
-  implement one interface method to switch to another provider.
+- **`PromptExecutor`** — what "running the prompt" means; executes one data
+  entry at a time and delegates LLM calls to the selected `LLMRunner`.
+  Built-ins: `default`, `template` (placeholder rendering).
+- **`Grader`** — your scoring logic, selected per test case. Built-ins include
+  deterministic graders (keywords, response shape, JSON schema/expected-match)
+  and `model_grader` (LLM-as-judge configured via the evaluation criteria).
+- **`PromptOptimizer` / `Summarizer`** — LLM-backed by default, swappable.
+- **`LLMRunner`** — the LLM transport: `claude_code` (headless `claude -p`),
+  `ollama` (local Ollama server), `fake` (offline echo); implement one
+  interface method to add another provider.
 
 Copy-pasteable examples for each: [docs/EXTENDING.md](docs/EXTENDING.md).
 
@@ -125,8 +146,8 @@ app/
 ├─ config.py          # pydantic-settings configuration
 ├─ models/            # Pydantic domain models
 ├─ core/              # ABCs + implementation registry
-├─ llm/               # LLMRunner interface + Claude Code / fake runners
-├─ implementations/   # USER code (reference examples shipped)
+├─ llm/               # LLMRunner interface + Claude Code / Ollama / fake runners
+├─ implementations/   # USER code (executors + graders; reference examples shipped)
 ├─ services/          # evaluator, optimizer, summarizer, progress tracker
 ├─ db/                # Motor client + repositories
 ├─ api/               # JSON API routes + SSE + background execution
