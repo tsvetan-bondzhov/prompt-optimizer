@@ -121,6 +121,30 @@ class JsonSchemaValidationGrader(_JsonGraderBase):
     """
 
     name = "json_schema"
+    display_name = "JSON schema validation"
+    description = (
+        "Parses the output as JSON and validates it against a JSON Schema "
+        "(Draft 2020-12). Valid output scores 10; each violation subtracts 3 "
+        "(floored at 1); unparseable output scores 1. Typically configured "
+        "once for the whole dataset."
+    )
+    criteria_info = [
+        {
+            "key": "json_schema",
+            "description": "JSON Schema object the output must conform to. "
+            "Legacy alias: 'schema'.",
+        },
+    ]
+    criteria_sample = {
+        "json_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "age": {"type": "integer", "minimum": 0},
+            },
+            "required": ["name", "age"],
+        }
+    }
 
     def _schema(
         self, test_case: TestCase, entry_index: int
@@ -207,6 +231,22 @@ class JsonExpectedMatchGrader(_JsonGraderBase):
     """
 
     name = "json_expected_match"
+    display_name = "Expected JSON match"
+    description = (
+        "Parses the output as JSON and compares it field by field to an "
+        "expected document (object or array). The score is the percentage of "
+        "compared fields that match, mapped onto 1-10. Typically configured "
+        "per data entry."
+    )
+    criteria_info = [
+        {
+            "key": "expected_json",
+            "description": "Expected JSON object or array; fields null/missing "
+            "on both sides are ignored, unexpected output fields are "
+            "mismatches. Legacy alias: 'expected'.",
+        },
+    ]
+    criteria_sample = {"expected_json": {"name": "Ada", "age": 36, "city": None}}
 
     def _expected(
         self, test_case: TestCase, entry_index: int

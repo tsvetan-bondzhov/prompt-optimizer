@@ -45,7 +45,21 @@ class PromptExecutor(ABC):
     User-supplied. The executor is responsible for whatever "running the prompt"
     means for the user's use case (an LLM call, a tool invocation, etc.). It is
     invoked once per data entry; the entry holds the inputs for that execution.
+
+    Metadata (shown in the UI): ``display_name`` is the human-readable label,
+    ``description`` explains the executor's purpose, and ``criteria_info`` /
+    ``criteria_sample`` document any evaluation-criteria keys it reads
+    (usually none for executors).
     """
+
+    #: Human-readable name shown in the UI (falls back to the registry name).
+    display_name: str = ""
+    #: Short explanation of what this executor does, shown in the info popup.
+    description: str = ""
+    #: Documented criteria keys: ``[{"key": ..., "description": ...}, ...]``.
+    criteria_info: list[dict[str, str]] = []
+    #: Copy-pasteable sample evaluation criteria (JSON-serializable) or None.
+    criteria_sample: Any = None
 
     @abstractmethod
     async def execute(
@@ -74,9 +88,21 @@ class Grader(ABC):
     Graders are invoked once per data entry; :meth:`criteria_for` resolves the
     criteria to grade against **per key**: a key present in the entry's own
     criteria wins, every other key falls back to the dataset-level criteria.
+
+    Metadata (shown in the UI): ``display_name`` is the human-readable label,
+    ``description`` explains the grader's purpose, and ``criteria_info`` /
+    ``criteria_sample`` document the evaluation-criteria keys it consumes.
     """
 
     name: str
+    #: Human-readable name shown in the UI (falls back to ``name``).
+    display_name: str = ""
+    #: Short explanation of what this grader scores, shown in the info popup.
+    description: str = ""
+    #: Documented criteria keys: ``[{"key": ..., "description": ...}, ...]``.
+    criteria_info: list[dict[str, str]] = []
+    #: Copy-pasteable sample evaluation criteria (JSON-serializable) or None.
+    criteria_sample: Any = None
 
     def criteria_for(
         self, test_case: TestCase, entry_index: int

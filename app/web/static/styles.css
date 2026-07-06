@@ -150,3 +150,14 @@ ul.compact { margin: 0; padding-left: 1.1rem; font-size: 0.85rem; }
 
 .row-accepted td:first-child { border-left: 4px solid var(--ok); }
 .row-rejected td:first-child { border-left: 4px solid var(--danger); }
+
+/* Implementation info popups (test case form) */
+.info-btn {
+  border: none; background: none; cursor: pointer;
+  color: #4a7dff; font-size: 1rem; padding: 0 0.25rem; line-height: 1;
+}
+.info-btn:hover { color: #1f52d4; }
+.info-dialog { max-width: 40rem; border: 1px solid #ccc; border-radius: 8px; padding: 1rem 1.25rem; }
+.info-dialog::backdrop { background: rgba(0, 0, 0, 0.4); }
+.info-dialog h3 { margin-top: 0; }
+.info-dialog pre { max-height: 16rem; overflow: auto; }

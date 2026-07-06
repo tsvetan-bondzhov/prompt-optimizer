@@ -27,7 +27,7 @@ from app.api.deps import (
     get_test_case_repository,
 )
 from app.api.routes_evaluation import resolve_test_cases
-from app.core.registry import available
+from app.core.registry import available, describe
 from app.db.repositories import (
     EvaluationReportRepository,
     EvaluationRunRepository,
@@ -154,8 +154,8 @@ async def test_case_new(request: Request) -> HTMLResponse:
         request,
         "test_case_form.html",
         test_case=None,
-        available_graders=available("grader"),
-        available_executors=available("executor"),
+        grader_infos=describe("grader"),
+        executor_infos=describe("executor"),
         available_llm_runners=available("llm_runner"),
     )
 
@@ -228,8 +228,8 @@ async def test_case_edit(
         request,
         "test_case_form.html",
         test_case=doc,
-        available_graders=available("grader"),
-        available_executors=available("executor"),
+        grader_infos=describe("grader"),
+        executor_infos=describe("executor"),
         available_llm_runners=available("llm_runner"),
     )
 

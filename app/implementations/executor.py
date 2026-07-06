@@ -48,6 +48,13 @@ class ReferencePromptExecutor(PromptExecutor):
     :class:`LLMRunner`. Swap the marked line for your own target invocation.
     """
 
+    display_name = "System + JSON input"
+    description = (
+        "Sends the prompt text as the system prompt and the data entry "
+        "(pretty-printed JSON; the test case name when the entry is empty) "
+        "as the user prompt to the selected LLM runner."
+    )
+
     async def execute(
         self,
         prompt: PromptText,

@@ -39,6 +39,7 @@ __all__ = [
     "register",
     "resolve",
     "available",
+    "describe",
     "clear",
     "get_executor",
     "get_grader",
@@ -126,6 +127,37 @@ def available(category: str) -> list[str]:
 
     _check_category(category)
     return sorted(_REGISTRY[category])
+
+
+def describe(category: str) -> list[dict[str, Any]]:
+    """Return UI metadata for every implementation registered in ``category``.
+
+    Each item: ``{"name", "display_name", "description", "criteria_info",
+    "criteria_sample", "options_schema"}`` — read from the instantiated
+    implementation's class attributes, with sensible fallbacks so
+    implementations without metadata still render.
+    """
+
+    infos: list[dict[str, Any]] = []
+    for name in available(category):
+        try:
+            instance = resolve(category, name)
+        except Exception:  # pragma: no cover - defensive: bad factory
+            infos.append({"name": name, "display_name": name})
+            continue
+        infos.append(
+            {
+                "name": name,
+                "display_name": getattr(instance, "display_name", "") or name,
+                "description": getattr(instance, "description", "") or "",
+                "criteria_info": list(getattr(instance, "criteria_info", []) or []),
+                "criteria_sample": getattr(instance, "criteria_sample", None),
+                "options_schema": list(
+                    getattr(instance, "options_schema", []) or []
+                ),
+            }
+        )
+    return infos
 
 
 def clear(category: str | None = None) -> None:

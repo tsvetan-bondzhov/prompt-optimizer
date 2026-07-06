@@ -61,6 +61,20 @@ class KeywordCoverageGrader(Grader):
     """
 
     name = "keyword_coverage"
+    display_name = "Keyword coverage"
+    description = (
+        "Checks which expected keywords appear in the output and scores the "
+        "coverage ratio linearly onto 1-10. Without configured keywords the "
+        "grader returns a neutral 5."
+    )
+    criteria_info = [
+        {
+            "key": "keywords",
+            "description": "List of keywords expected to appear in the output "
+            "(case-insensitive). Legacy alias: 'expected_keywords'.",
+        },
+    ]
+    criteria_sample = {"keywords": ["refund", "14 days", "support@example.com"]}
 
     def _expected_keywords(
         self, test_case: TestCase, entry_index: int
@@ -132,6 +146,23 @@ class ResponseQualityGrader(Grader):
     """
 
     name = "response_quality"
+    display_name = "Response quality (shape)"
+    description = (
+        "Content-agnostic heuristic on the shape of the output: rewards a "
+        "non-empty response whose length falls within the configured "
+        "min/max character bounds."
+    )
+    criteria_info = [
+        {
+            "key": "min_length",
+            "description": "Minimum output length in characters (default 1).",
+        },
+        {
+            "key": "max_length",
+            "description": "Maximum output length in characters (optional).",
+        },
+    ]
+    criteria_sample = {"min_length": 50, "max_length": 800}
 
     async def grade(
         self,

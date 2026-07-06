@@ -55,6 +55,15 @@ def render_prompt_template(template: str, data: dict[str, Any]) -> str:
 class TemplateExecutor(PromptExecutor):
     """Render the prompt template with the entry, then delegate to the runner."""
 
+    display_name = "Template"
+    description = (
+        "Treats the prompt as a template: {placeholder} tokens are replaced "
+        "with the matching fields of the data entry (backslash-escaped "
+        "braces stay literal; unmatched tokens are left as-is), then the "
+        "rendered prompt is sent to the selected LLM runner as a single "
+        "prompt."
+    )
+
     async def execute(
         self,
         prompt: PromptText,

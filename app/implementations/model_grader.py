@@ -55,6 +55,29 @@ class ModelGrader(Grader):
     """Grade a prompt result by asking an LLM configured in the criteria."""
 
     name = "model_grader"
+    display_name = "Model grader (LLM-as-judge)"
+    description = (
+        "Asks an LLM to judge the output against your evaluation "
+        "instructions and return a structured verdict (score 1-10, "
+        "strengths, weaknesses, reasoning). Judge failures score 1."
+    )
+    criteria_info = [
+        {
+            "key": "evaluation_prompt",
+            "description": "Required. The judging instructions given to the "
+            "model alongside the output under evaluation.",
+        },
+        {
+            "key": "llm_runner",
+            "description": "Optional registered LLM runner name used for "
+            "judging; the active default runner when omitted.",
+        },
+    ]
+    criteria_sample = {
+        "evaluation_prompt": "Judge whether the answer is factually correct "
+        "and directly addresses the question.",
+        "llm_runner": "ollama",
+    }
 
     async def grade(
         self,
