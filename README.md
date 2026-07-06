@@ -130,7 +130,8 @@ per prompt in the UI, or through the `ACTIVE_*` defaults:
 
 - **`PromptExecutor`** — what "running the prompt" means; executes one data
   entry at a time and delegates LLM calls to the selected `LLMRunner`.
-  Built-ins: `default`, `template` (placeholder rendering).
+  Built-ins: `default`, `template` (placeholder rendering), `no_args`
+  (prompt as-is), `concat` (prompt + serialized entry).
 - **`Grader`** — your scoring logic, selected per test case. Built-ins include
   deterministic graders (keywords, response shape, word count, JSON
   schema/expected-match) and `model_grader` (LLM-as-judge configured via the
