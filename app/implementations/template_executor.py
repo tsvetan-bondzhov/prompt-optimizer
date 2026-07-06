@@ -75,7 +75,7 @@ class TemplateExecutor(PromptExecutor):
 
         rendered = render_prompt_template(prompt.text, entry or {})
         output_text = await llm_runner.run("", rendered)
-        return PromptResult(text=output_text)
+        return PromptResult(text=output_text, prompt_text=rendered)
 
 
 register("executor", "template", TemplateExecutor)

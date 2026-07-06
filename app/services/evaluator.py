@@ -306,6 +306,10 @@ class EvaluatorService:
                 result = await executor.execute(
                     prompt, test_case, entry, llm_runner
                 )
+                if result.prompt_text is None:
+                    result = result.model_copy(
+                        update={"prompt_text": prompt.text}
+                    )
                 grader_evals = await self._run_graders(
                     graders, result, test_case, entry_index
                 )

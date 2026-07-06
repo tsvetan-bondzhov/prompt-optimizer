@@ -72,7 +72,10 @@ class ReferencePromptExecutor(PromptExecutor):
         # test case). Your executor might instead call an API, run a tool, etc.
         output_text = await llm_runner.run(system_prompt, user_prompt)
 
-        return PromptResult(text=output_text)
+        return PromptResult(
+            text=output_text,
+            prompt_text=f"{system_prompt}\n\n{user_prompt}".strip(),
+        )
 
 
 # Register the reference executor under the default name on import so that

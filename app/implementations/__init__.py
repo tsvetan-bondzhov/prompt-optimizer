@@ -18,6 +18,7 @@ from app.implementations import (  # noqa: F401
     model_grader,
     simple_executors,
     template_executor,
+    word_count_grader,
 )
 
 __all__ = [
@@ -27,4 +28,5 @@ __all__ = [
     "model_grader",
     "simple_executors",
     "template_executor",
+    "word_count_grader",
 ]

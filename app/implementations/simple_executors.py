@@ -44,7 +44,7 @@ class NoArgsExecutor(PromptExecutor):
         """Execute ``prompt`` unchanged via ``llm_runner``."""
 
         output_text = await llm_runner.run("", prompt.text)
-        return PromptResult(text=output_text)
+        return PromptResult(text=output_text, prompt_text=prompt.text)
 
 
 class ConcatExecutor(PromptExecutor):
@@ -71,7 +71,7 @@ class ConcatExecutor(PromptExecutor):
             serialized = json.dumps(entry, indent=2, ensure_ascii=False)
             combined = f"{prompt.text}\n\n{serialized}"
         output_text = await llm_runner.run("", combined)
-        return PromptResult(text=output_text)
+        return PromptResult(text=output_text, prompt_text=combined)
 
 
 register("executor", "no_args", NoArgsExecutor)
