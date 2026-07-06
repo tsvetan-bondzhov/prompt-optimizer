@@ -101,7 +101,6 @@ class _JsonGraderBase(Grader):
             weakness = "Output is not valid JSON"
             reasoning = f"JSON parsing failed: {parse_error}"
         return PromptEvaluation(
-            strengths=["Output was produced"],
             weaknesses=[weakness],
             reasoning=reasoning,
             score=1,
@@ -162,7 +161,6 @@ class JsonSchemaValidationGrader(_JsonGraderBase):
         schema = self._schema(test_case, entry_index)
         if schema is None:
             return PromptEvaluation(
-                strengths=["Output produced for the test case"],
                 weaknesses=["No 'json_schema' configured in evaluation_criteria"],
                 reasoning=(
                     "No JSON schema found in test_case.evaluation_criteria, so "
@@ -183,7 +181,6 @@ class JsonSchemaValidationGrader(_JsonGraderBase):
         if not errors:
             return PromptEvaluation(
                 strengths=["Output is valid JSON", "Output conforms to the schema"],
-                weaknesses=["No schema violations detected"],
                 reasoning="Parsed the output as JSON and validated it against "
                 "the configured schema: no violations.",
                 score=10,
@@ -264,7 +261,6 @@ class JsonExpectedMatchGrader(_JsonGraderBase):
         expected = self._expected(test_case, entry_index)
         if expected is None:
             return PromptEvaluation(
-                strengths=["Output produced for the test case"],
                 weaknesses=["No 'expected_json' configured in evaluation_criteria"],
                 reasoning=(
                     "No expected JSON object or array found in "
@@ -321,10 +317,8 @@ class JsonExpectedMatchGrader(_JsonGraderBase):
 
         strengths = trim(
             [f"Field {path} matches the expected value" for path in matched]
-        ) or [f"Output is a valid JSON {expected_kind}"]
-        weaknesses = trim(
-            [f"Field {message}" for message in mismatched]
-        ) or ["All compared fields match the expected values"]
+        )
+        weaknesses = trim([f"Field {message}" for message in mismatched])
 
         reasoning = (
             f"Matched {len(matched)}/{compared} compared field(s) "

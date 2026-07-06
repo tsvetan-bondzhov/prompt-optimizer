@@ -24,8 +24,9 @@ def test_score_bounds_enforced():
 
 
 def test_strengths_weaknesses_bounds():
-    with pytest.raises(ValidationError):
-        PromptEvaluation(strengths=[], weaknesses=["w"], reasoning="r", score=5)
+    # Empty lists are allowed — graders omit entries that add no information.
+    empty = PromptEvaluation(strengths=[], weaknesses=[], reasoning="r", score=5)
+    assert empty.strengths == [] and empty.weaknesses == []
     with pytest.raises(ValidationError):
         PromptEvaluation(
             strengths=["a", "b", "c", "d"], weaknesses=["w"], reasoning="r", score=5

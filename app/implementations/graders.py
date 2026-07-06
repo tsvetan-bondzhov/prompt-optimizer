@@ -17,7 +17,8 @@ call, regex/JSON assertions, embedding similarity, etc.). Whatever you do, the
 step MUST return a valid :class:`PromptEvaluation`:
 
 * ``score``: an integer in ``[1, 10]``
-* ``strengths`` / ``weaknesses``: 1–3 non-empty items each
+* ``strengths`` / ``weaknesses``: up to 3 non-empty items each (empty is
+  fine — only report entries that carry information)
 * ``reasoning``: a non-empty string
 * ``grader_name``: set to the step's ``name`` for traceability
 """
@@ -99,7 +100,6 @@ class KeywordCoverageGrader(Grader):
 
         if not keywords:
             return PromptEvaluation(
-                strengths=["Output produced for the test case"],
                 weaknesses=["No expected keywords configured to verify against"],
                 reasoning=(
                     "No keywords found in test_case.evaluation_criteria, so this "
@@ -114,12 +114,8 @@ class KeywordCoverageGrader(Grader):
         coverage = len(present) / len(keywords)
         score = clamp_score(1 + coverage * 9)  # map [0, 1] -> [1, 10]
 
-        strengths = trim(
-            [f"Contains expected keyword: {k!r}" for k in present]
-        ) or ["Output was generated and inspected for keyword coverage"]
-        weaknesses = trim(
-            [f"Missing expected keyword: {k!r}" for k in missing]
-        ) or ["All expected keywords were present"]
+        strengths = trim([f"Contains expected keyword: {k!r}" for k in present])
+        weaknesses = trim([f"Missing expected keyword: {k!r}" for k in missing])
 
         reasoning = (
             f"Matched {len(present)}/{len(keywords)} expected keywords "
@@ -209,9 +205,9 @@ class ResponseQualityGrader(Grader):
             strengths.append(f"Within the maximum length of {max_length} characters")
             score += 1.0
 
-        # Guarantee the 1–3 item / non-empty constraints regardless of branch.
-        strengths = trim(strengths) or ["Output was generated and inspected"]
-        weaknesses = trim(weaknesses) or ["No structural issues detected"]
+        # Cap at 3 items; empty lists are fine.
+        strengths = trim(strengths)
+        weaknesses = trim(weaknesses)
 
         reasoning = (
             f"Heuristic shape check: length={length} chars, "

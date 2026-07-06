@@ -46,8 +46,9 @@ SYSTEM_PROMPT = (
     "evaluation instructions and the output under evaluation. Judge the "
     "output strictly against the instructions and respond with ONLY a JSON "
     'object of the form {"score": <integer 1-10>, "strengths": ["..."], '
-    '"weaknesses": ["..."], "reasoning": "..."}. Provide 1-3 strengths and '
-    "1-3 weaknesses, and keep the reasoning to a short paragraph."
+    '"weaknesses": ["..."], "reasoning": "..."}. Provide up to 3 strengths '
+    "and up to 3 weaknesses (empty lists are fine when there is nothing "
+    "noteworthy), and keep the reasoning to a short paragraph."
 )
 
 
@@ -96,7 +97,6 @@ class ModelGrader(Grader):
         evaluation_prompt = str(criteria.get("evaluation_prompt") or "").strip()
         if not evaluation_prompt:
             return PromptEvaluation(
-                strengths=["Output produced for the test case"],
                 weaknesses=[
                     "No 'evaluation_prompt' configured in evaluation criteria"
                 ],
@@ -125,7 +125,6 @@ class ModelGrader(Grader):
         except Exception as exc:  # noqa: BLE001 - a bad judge must not crash runs
             logger.warning("Model grading failed: %s", exc)
             return PromptEvaluation(
-                strengths=["Output produced for the test case"],
                 weaknesses=[f"Model grading failed: {exc}"],
                 reasoning=(
                     "The judging LLM call failed or returned an unusable "
@@ -141,12 +140,8 @@ class ModelGrader(Grader):
         data = _extract_json_object(raw)
 
         score = clamp_score(float(data.get("score", 0)))
-        strengths = trim(_coerce_str_list(data.get("strengths"))) or [
-            "No strengths reported by the judge"
-        ]
-        weaknesses = trim(_coerce_str_list(data.get("weaknesses"))) or [
-            "No weaknesses reported by the judge"
-        ]
+        strengths = trim(_coerce_str_list(data.get("strengths")))
+        weaknesses = trim(_coerce_str_list(data.get("weaknesses")))
         reasoning = data.get("reasoning")
         reasoning = reasoning.strip() if isinstance(reasoning, str) else ""
         if not reasoning:

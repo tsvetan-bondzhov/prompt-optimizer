@@ -81,8 +81,9 @@ criteria — it resolves them **per key**: a key present in
 back to the dataset-level `evaluation_criteria`. Different keys can live at
 different levels — e.g. `expected_json` typically varies per entry while
 `json_schema` is defined once for the whole dataset. Each grader must return a
-validated `PromptEvaluation`: 1–3 strengths, 1–3 weaknesses, non-empty
-reasoning, integer score 1–10.
+validated `PromptEvaluation`: up to 3 strengths and up to 3 weaknesses
+(empty lists are fine — omit entries that carry no information, e.g. a
+weakness saying everything passed), non-empty reasoning, integer score 1–10.
 
 ```python
 from app.core.interfaces import Grader

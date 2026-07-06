@@ -72,8 +72,9 @@ double quotes, ~88 col, Google-style docstrings with `:param:`).
 - Register routes with literal path segments (e.g. `/test-cases/import`,
   `/prompts/new`) **before** parameterized ones (`/test-cases/{id}`) —
   FastAPI matches in declaration order.
-- `PromptEvaluation` is strict: 1–3 strengths/weaknesses, non-empty reasoning,
-  integer score 1–10. Aggregated scores are floats clamped to [1, 10].
+- `PromptEvaluation`: up to 3 strengths/weaknesses (empty lists allowed —
+  don't add filler entries), non-empty reasoning, integer score 1–10.
+  Aggregated scores are floats clamped to [1, 10].
 - Editing a prompt's text (API or UI) intentionally resets `avg_score` and the
   summary; the next optimization run re-establishes a baseline.
 - The evaluator fails fast when a selected test case has no graders or

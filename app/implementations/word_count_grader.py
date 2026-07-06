@@ -85,7 +85,6 @@ class WordCountGrader(Grader):
             set(condition) & set(_OPERATORS)
         ):
             return PromptEvaluation(
-                strengths=["Output produced for the test case"],
                 weaknesses=["No 'word_count' condition configured"],
                 reasoning=(
                     "The word-count grader needs a 'word_count' object with "
@@ -99,7 +98,6 @@ class WordCountGrader(Grader):
         mode = condition.get("mode") or criteria.get("word_count_mode") or "response"
         if mode not in _MODES:
             return PromptEvaluation(
-                strengths=["Output produced for the test case"],
                 weaknesses=[f"Unknown word-count mode {mode!r}"],
                 reasoning=(
                     f"Mode must be one of {', '.join(_MODES)}; got {mode!r} — "
@@ -131,7 +129,6 @@ class WordCountGrader(Grader):
 
         if failed:
             return PromptEvaluation(
-                strengths=[f"Counted {counted} {mode} word(s)"],
                 weaknesses=failed[:3],
                 reasoning=(
                     f"Checked the {mode} word count ({counted}) against: "
@@ -146,7 +143,6 @@ class WordCountGrader(Grader):
                 f"{mode.capitalize()} word count {counted} satisfies "
                 f"{', '.join(checked)}"
             ],
-            weaknesses=["No word-count issues detected"],
             reasoning=(
                 f"Checked the {mode} word count ({counted}) against: "
                 f"{', '.join(checked)}. All conditions hold."

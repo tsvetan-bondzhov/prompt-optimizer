@@ -24,14 +24,15 @@ class PromptEvaluation(BaseModel):
 
     Constraints (plan §5):
       - ``score`` is an integer in ``[1, 10]``.
-      - ``strengths`` / ``weaknesses`` each contain 1–3 non-empty items.
+      - ``strengths`` / ``weaknesses`` hold up to 3 non-empty items each
+        (empty lists are fine — only report what adds information).
       - ``reasoning`` is a non-empty string.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    strengths: list[str] = Field(..., min_length=1, max_length=3)
-    weaknesses: list[str] = Field(..., min_length=1, max_length=3)
+    strengths: list[str] = Field(default_factory=list, max_length=3)
+    weaknesses: list[str] = Field(default_factory=list, max_length=3)
     reasoning: str = Field(..., min_length=1)
     score: int = Field(..., ge=1, le=10)
     grader_name: str | None = Field(
