@@ -19,9 +19,47 @@ No service code changes are needed — services resolve the runner by name via
 
 from __future__ import annotations
 
+from typing import Any
+
 from app.core.interfaces import LLMRunner
 
-__all__ = ["LLMRunner", "LLMRunnerError", "compose_prompt"]
+__all__ = [
+    "LLMRunner",
+    "LLMRunnerError",
+    "ConfiguredLLMRunner",
+    "compose_prompt",
+]
+
+
+class ConfiguredLLMRunner(LLMRunner):
+    """Bind runner-specific ``options`` to a runner instance.
+
+    Callers that hold a runner selection (test case / prompt) wrap the
+    resolved runner once; downstream code (executors, summarizers) keeps
+    calling the plain two-argument ``run`` without knowing about options.
+    Explicit per-call options still win over the bound ones.
+    """
+
+    def __init__(
+        self, runner: LLMRunner, options: dict[str, Any] | None = None
+    ) -> None:
+        """:param runner: The wrapped runner.
+        :param options: Options forwarded to every ``run`` invocation.
+        """
+
+        self._runner = runner
+        self._options = dict(options or {})
+
+    async def run(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        options: dict[str, Any] | None = None,
+    ) -> str:
+        """Forward to the wrapped runner with the bound options applied."""
+
+        merged = {**self._options, **(options or {})}
+        return await self._runner.run(system_prompt, user_prompt, merged or None)
 
 
 class LLMRunnerError(RuntimeError):

@@ -28,15 +28,55 @@ __all__ = ["OllamaLLMRunner"]
 class OllamaLLMRunner(LLMRunner):
     """Run prompts against a local Ollama server (``/api/generate``)."""
 
-    async def run(self, system_prompt: str, user_prompt: str) -> str:
-        """Generate a completion for the composed prompt via Ollama."""
+    options_schema = [
+        {
+            "name": "model",
+            "label": "Model name",
+            "type": "text",
+            "default": "mistral",
+        },
+        {
+            "name": "temperature",
+            "label": "Temperature",
+            "type": "number",
+            "default": "",
+        },
+    ]
 
-        settings = get_settings()
-        payload = {
-            "model": settings.OLLAMA_MODEL,
+    @staticmethod
+    def build_payload(
+        system_prompt: str,
+        user_prompt: str,
+        options: dict | None = None,
+    ) -> dict:
+        """Build the ``/api/generate`` request body, applying ``options``.
+
+        ``model`` overrides ``OLLAMA_MODEL``; a non-empty ``temperature`` is
+        passed through Ollama's ``options.temperature``.
+        """
+
+        options = options or {}
+        model = str(options.get("model") or "").strip() or get_settings().OLLAMA_MODEL
+        payload: dict = {
+            "model": model,
             "prompt": compose_prompt(system_prompt, user_prompt),
             "stream": False,
         }
+        temperature = options.get("temperature")
+        if temperature is not None and str(temperature).strip() != "":
+            payload["options"] = {"temperature": float(temperature)}
+        return payload
+
+    async def run(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        options: dict | None = None,
+    ) -> str:
+        """Generate a completion for the composed prompt via Ollama."""
+
+        settings = get_settings()
+        payload = self.build_payload(system_prompt, user_prompt, options)
         url = f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/generate"
 
         try:

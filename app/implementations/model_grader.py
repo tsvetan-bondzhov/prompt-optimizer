@@ -72,6 +72,11 @@ class ModelGrader(Grader):
             "description": "Optional registered LLM runner name used for "
             "judging; the active default runner when omitted.",
         },
+        {
+            "key": "llm_runner_options",
+            "description": "Optional runner-specific options for the judge "
+            "(e.g. model, effort, temperature).",
+        },
     ]
     criteria_sample = {
         "evaluation_prompt": "Judge whether the answer is factually correct "
@@ -105,6 +110,9 @@ class ModelGrader(Grader):
             )
 
         runner_name = str(criteria.get("llm_runner") or "").strip() or None
+        runner_options = criteria.get("llm_runner_options")
+        if not isinstance(runner_options, dict):
+            runner_options = None
         user_prompt = (
             f"Evaluation instructions:\n{evaluation_prompt}\n\n"
             f"Output under evaluation:\n{result.text}"
@@ -112,7 +120,7 @@ class ModelGrader(Grader):
 
         try:
             runner = get_llm_runner(runner_name)
-            raw = await runner.run(SYSTEM_PROMPT, user_prompt)
+            raw = await runner.run(SYSTEM_PROMPT, user_prompt, runner_options)
             return self._parse_verdict(raw)
         except Exception as exc:  # noqa: BLE001 - a bad judge must not crash runs
             logger.warning("Model grading failed: %s", exc)

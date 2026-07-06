@@ -24,6 +24,7 @@
       {% endfor %}
     </select>
   </label>
+  <div id="optimizer-runner-options" class="runner-options"></div>
   <fieldset>
     <legend>Test cases</legend>
     {% if test_cases %}
@@ -44,4 +45,17 @@
     <a class="btn" href="{{ '/prompts/' + prompt.id if prompt else '/prompts' }}">Cancel</a>
   </div>
 </form>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/runner_options.js"></script>
+<script>
+  window.LLM_RUNNER_OPTIONS = {{ llm_runner_options_map|tojson }};
+  initRunnerOptions(
+    "optimizer_llm_runner",
+    "optimizer-runner-options",
+    {{ (prompt.optimizer_llm_runner_options if prompt and prompt.optimizer_llm_runner_options is defined and prompt.optimizer_llm_runner_options else {})|tojson }},
+    {{ (prompt.optimizer_llm_runner if prompt and prompt.optimizer_llm_runner else '')|tojson }}
+  );
+</script>
 {% endblock %}

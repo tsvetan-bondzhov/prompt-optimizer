@@ -73,10 +73,19 @@ class _TestCaseFields(BaseModel):
         min_length=1,
         description="LLM runner the executor delegates prompt execution to.",
     )
+    executor_llm_runner_options: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Runner-specific options for the executor's LLM runner "
+        "(e.g. model, effort, temperature; empty values are ignored).",
+    )
     summarizer_llm_runner: str = Field(
         default_factory=lambda: get_settings().ACTIVE_LLM_RUNNER,
         min_length=1,
         description="LLM runner used when summarizing this test case's results.",
+    )
+    summarizer_llm_runner_options: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Runner-specific options for the summarizer's LLM runner.",
     )
 
     @field_validator("data", mode="before")

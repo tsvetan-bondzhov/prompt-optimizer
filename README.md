@@ -68,10 +68,13 @@ The suite runs entirely offline (mongomock + deterministic fakes; no LLM calls).
      when an entry has no criteria of its own;
    - **graders**: checkboxes selecting which registered graders run
      (`keyword_coverage`, `response_quality`, `json_schema`,
-     `json_expected_match`, `model_grader`, …);
+     `json_expected_match`, `word_count`, `model_grader`, …);
    - **executor**: radio buttons selecting how the prompt is run (`default`,
-     `template`, …), plus the **LLM runner** the executor delegates to and
-     the LLM runner used for summarization.
+     `template`, `no_args`, `concat`, …), plus the **LLM runner** the
+     executor delegates to and the LLM runner used for summarization —
+     each with runner-specific options (model, effort, temperature).
+   Every executor/grader shows a human-readable name with an ℹ info popup
+   documenting its purpose, criteria keys, and a copy-pasteable sample.
    Bulk JSON import is supported.
 2. **Prompts** (`/prompts`) — the prompt management page: create, edit, and
    delete prompts. A prompt has a **name** (shown in reports and tables), a
@@ -129,8 +132,9 @@ per prompt in the UI, or through the `ACTIVE_*` defaults:
   entry at a time and delegates LLM calls to the selected `LLMRunner`.
   Built-ins: `default`, `template` (placeholder rendering).
 - **`Grader`** — your scoring logic, selected per test case. Built-ins include
-  deterministic graders (keywords, response shape, JSON schema/expected-match)
-  and `model_grader` (LLM-as-judge configured via the evaluation criteria).
+  deterministic graders (keywords, response shape, word count, JSON
+  schema/expected-match) and `model_grader` (LLM-as-judge configured via the
+  evaluation criteria).
 - **`PromptOptimizer` / `Summarizer`** — LLM-backed by default, swappable.
 - **`LLMRunner`** — the LLM transport: `claude_code` (headless `claude -p`),
   `ollama` (local Ollama server), `fake` (offline echo); implement one

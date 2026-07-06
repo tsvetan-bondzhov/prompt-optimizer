@@ -29,7 +29,7 @@ from app.db.repositories import (
 )
 from app.models import PromptText, RunConfig, RunStatus, TestCase
 from app.services.evaluator import EvaluationRunResult, EvaluatorService
-from app.services.optimizer import OptimizerService, summarizer_runner_name
+from app.services.optimizer import OptimizerService, summarizer_runner_selection
 from app.services.progress import ProgressTracker
 from app.services.summarizer import SummarizerService
 
@@ -108,9 +108,11 @@ async def _apply_evaluation_to_prompt(
     and summarized strengths/weaknesses/reasoning replace the previous ones.
     """
 
+    runner_name, runner_options = summarizer_runner_selection(test_cases)
     summary = await SummarizerService().summarize(
         result.points,
-        llm_runner_name=summarizer_runner_name(test_cases),
+        llm_runner_name=runner_name,
+        llm_runner_options=runner_options,
     )
     await PromptRepository(db).update(
         prompt_id,

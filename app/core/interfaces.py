@@ -156,11 +156,30 @@ class Summarizer(ABC):
 
 
 class LLMRunner(ABC):
-    """A minimal text-in / text-out LLM interface used by optimizer/summarizer."""
+    """A minimal text-in / text-out LLM interface used by optimizer/summarizer.
+
+    ``options_schema`` documents the runner-specific options the UI offers
+    wherever this runner can be selected. Each item:
+    ``{"name", "label", "type" ("text"|"number"), "default"}``. The selected
+    values are stored with the test case / prompt and handed back through the
+    ``options`` argument of :meth:`run`; runners without options ignore it.
+    """
+
+    #: Runner-specific option fields presented in the UI (may be empty).
+    options_schema: list[dict[str, Any]] = []
 
     @abstractmethod
-    async def run(self, system_prompt: str, user_prompt: str) -> str:
-        """Run the LLM with the given prompts and return the response text."""
+    async def run(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        options: dict[str, Any] | None = None,
+    ) -> str:
+        """Run the LLM with the given prompts and return the response text.
+
+        :param options: Runner-specific options (see ``options_schema``);
+            ``None`` or missing keys mean "use the runner's defaults".
+        """
         raise NotImplementedError
 
 

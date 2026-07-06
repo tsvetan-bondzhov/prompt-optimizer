@@ -77,15 +77,48 @@ def _parse_json_field(raw: str, field: str) -> dict[str, Any]:
     return value
 
 
-def _runner_selection_fields(form: Any) -> dict[str, str]:
-    """Executor / LLM-runner selections from a test case form (when present)."""
+def _runner_selection_fields(form: Any) -> dict[str, Any]:
+    """Executor / LLM-runner selections + options from a test case form."""
 
-    fields: dict[str, str] = {}
+    fields: dict[str, Any] = {}
     for key in ("executor_name", "executor_llm_runner", "summarizer_llm_runner"):
         value = str(form.get(key, "")).strip()
         if value:
             fields[key] = value
+    fields["executor_llm_runner_options"] = _runner_options(
+        form, "executor_llm_runner"
+    )
+    fields["summarizer_llm_runner_options"] = _runner_options(
+        form, "summarizer_llm_runner"
+    )
     return fields
+
+
+def _runner_options(form: Any, prefix: str) -> dict[str, Any]:
+    """Collect ``<prefix>_opt_*`` runner option inputs (empty values ignored)."""
+
+    options: dict[str, Any] = {}
+    for key in ("model", "effort", "temperature"):
+        value = str(form.get(f"{prefix}_opt_{key}", "")).strip()
+        if not value:
+            continue
+        if key == "temperature":
+            try:
+                options[key] = float(value)
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Field {prefix}_opt_temperature must be a number.",
+                ) from None
+        else:
+            options[key] = value
+    return options
+
+
+def _llm_runner_options_map() -> dict[str, Any]:
+    """Runner name -> options schema, for the runner-options UI."""
+
+    return {info["name"]: info["options_schema"] for info in describe("llm_runner")}
 
 
 def _parse_json_array_field(raw: str, field: str) -> list[dict[str, Any]]:
@@ -157,6 +190,7 @@ async def test_case_new(request: Request) -> HTMLResponse:
         grader_infos=describe("grader"),
         executor_infos=describe("executor"),
         available_llm_runners=available("llm_runner"),
+        llm_runner_options_map=_llm_runner_options_map(),
     )
 
 
@@ -210,6 +244,12 @@ async def test_case_import(
             ),
             evaluation_criteria=item.get("evaluation_criteria") or {},
             grader_names=item.get("grader_names") or [],
+            executor_llm_runner_options=(
+                item.get("executor_llm_runner_options") or {}
+            ),
+            summarizer_llm_runner_options=(
+                item.get("summarizer_llm_runner_options") or {}
+            ),
         )
         await repo.create(test_case.model_dump())
     return RedirectResponse("/test-cases", status_code=status.HTTP_303_SEE_OTHER)
@@ -231,6 +271,7 @@ async def test_case_edit(
         grader_infos=describe("grader"),
         executor_infos=describe("executor"),
         available_llm_runners=available("llm_runner"),
+        llm_runner_options_map=_llm_runner_options_map(),
     )
 
 
@@ -293,6 +334,7 @@ async def prompt_new(
         prompt=None,
         test_cases=await test_cases.list(limit=500),
         available_llm_runners=available("llm_runner"),
+        llm_runner_options_map=_llm_runner_options_map(),
     )
 
 
@@ -308,6 +350,7 @@ async def prompt_create(
         goal=str(form.get("goal", "")).strip(),
         current_prompt=str(form.get("current_prompt", "")),
         test_case_ids=[str(v) for v in form.getlist("test_case_ids")],
+        optimizer_llm_runner_options=_runner_options(form, "optimizer_llm_runner"),
         **({"optimizer_llm_runner": optimizer_runner} if optimizer_runner else {}),
     )
     await repo.create(prompt.model_dump())
@@ -353,6 +396,7 @@ async def prompt_edit(
         prompt=prompt,
         test_cases=await test_cases.list(limit=500),
         available_llm_runners=available("llm_runner"),
+        llm_runner_options_map=_llm_runner_options_map(),
     )
 
 
@@ -375,6 +419,9 @@ async def prompt_update(
     optimizer_runner = str(form.get("optimizer_llm_runner", "")).strip()
     if optimizer_runner:
         changes["optimizer_llm_runner"] = optimizer_runner
+    changes["optimizer_llm_runner_options"] = _runner_options(
+        form, "optimizer_llm_runner"
+    )
     # A manually edited prompt invalidates the measured score/summary.
     if changes["current_prompt"] != existing.get("current_prompt"):
         changes.update(

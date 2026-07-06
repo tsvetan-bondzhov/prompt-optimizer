@@ -70,6 +70,10 @@ class Prompt(BaseModel):
         min_length=1,
         description="LLM runner used by the prompt optimizer for this prompt.",
     )
+    optimizer_llm_runner_options: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Runner-specific options for the optimizer's LLM runner.",
+    )
     updated_at: datetime = Field(default_factory=utcnow)
 
 
@@ -136,4 +140,8 @@ class OptimizationContext(BaseModel):
     llm_runner_name: str | None = Field(
         default=None,
         description="Registered LLM runner the optimizer should use.",
+    )
+    llm_runner_options: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Runner-specific options for the optimizer's LLM runner.",
     )

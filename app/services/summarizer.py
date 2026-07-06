@@ -25,6 +25,7 @@ from collections.abc import Callable, Sequence
 from typing import Optional, Union
 
 from app.core.interfaces import LLMRunner, Summarizer
+from app.llm.base import ConfiguredLLMRunner
 from app.core.registry import get_llm_runner, get_summarizer
 from app.models import EvaluationPoint, EvaluationSummary, PromptEvaluation
 
@@ -55,6 +56,7 @@ class SummarizerService:
         self,
         points: SummarizeInput,
         llm_runner_name: Optional[str] = None,
+        llm_runner_options: Optional[dict] = None,
     ) -> EvaluationSummary:
         """Merge ``points`` into a single :class:`EvaluationSummary`.
 
@@ -65,6 +67,8 @@ class SummarizerService:
         :param llm_runner_name: Registered LLM runner to summarize with (from
             the test case's ``summarizer_llm_runner``); ``None`` uses the
             active default.
+        :param llm_runner_options: Runner-specific options bound to the
+            resolved runner (from ``summarizer_llm_runner_options``).
         :returns: The consolidated summary produced by the active summarizer.
         """
 
@@ -73,6 +77,8 @@ class SummarizerService:
         llm_runner: Optional[LLMRunner] = (
             get_llm_runner(llm_runner_name) if llm_runner_name else None
         )
+        if llm_runner is not None and llm_runner_options:
+            llm_runner = ConfiguredLLMRunner(llm_runner, llm_runner_options)
         return await summarizer.summarize(evaluations, llm_runner)
 
     @staticmethod

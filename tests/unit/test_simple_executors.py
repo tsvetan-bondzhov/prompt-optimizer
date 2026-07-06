@@ -13,7 +13,12 @@ class RecordingRunner(LLMRunner):
     def __init__(self) -> None:
         self.calls: list[tuple[str, str]] = []
 
-    async def run(self, system_prompt: str, user_prompt: str) -> str:
+    async def run(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        options: dict | None = None,
+    ) -> str:
         self.calls.append((system_prompt, user_prompt))
         return "out"
 

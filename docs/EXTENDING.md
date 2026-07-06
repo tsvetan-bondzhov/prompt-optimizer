@@ -55,6 +55,11 @@ register("executor", "mine", MyExecutor)
 
 Once registered, `mine` appears as a radio button in the test case form.
 
+Give your implementation UI metadata — `display_name`, `description`,
+`criteria_info` (documented criteria keys), and `criteria_sample`
+(copy-pasteable snippet) — and the test case form shows the friendly name
+with an info popup.
+
 Built-in executors:
 
 - `default` — treats `prompt.text` as the system prompt and the pretty-printed
@@ -63,6 +68,8 @@ Built-in executors:
   fields (`\{` / `\}` escape literal braces), then sends the rendered prompt
   through the selected runner. (This is the former `OllamaMistralExecutor`;
   the Ollama transport now lives in the `ollama` LLM runner.)
+- `no_args` — sends the prompt as-is, ignoring the data entry.
+- `concat` — appends the JSON-serialized data entry to the prompt.
 
 ## 2. Implement a `Grader`
 
@@ -109,7 +116,9 @@ register("grader", ContainsAnswerGrader.name, ContainsAnswerGrader)
 
 Built-in graders: `keyword_coverage`, `response_quality`
 (`app/implementations/graders.py`), `json_schema`, `json_expected_match`
-(`app/implementations/json_graders.py`), and `model_grader`
+(`app/implementations/json_graders.py`), `word_count`
+(`app/implementations/word_count_grader.py` — eq/gt/lt/gte/lte conditions
+with a response/prompt/total mode), and `model_grader`
 (`app/implementations/model_grader.py`).
 
 ### The model grader (LLM-as-judge)
@@ -197,6 +206,15 @@ register("llm_runner", "anthropic_api", AnthropicAPIRunner)
 
 Raise `LLMRunnerError` on failure so runs are marked `failed` with the error
 preserved.
+
+Runners can declare an `options_schema` (list of
+`{"name", "label", "type", "default"}`) — the UI then offers those inputs
+wherever the runner is selectable and stores the values with the test case /
+prompt; they arrive back through the `options` argument of `run()`. Built-in
+schemas: `claude_code` (model, defaulting to `claude-sonnet-4-6`; effort;
+temperature — empty values are ignored and map to `--model` / `--effort` /
+`--temperature` CLI flags) and `ollama` (model, defaulting to `mistral`;
+temperature).
 
 Built-in runners: `claude_code` (headless `claude -p` subprocess, path via
 `CLAUDE_CLI_PATH`), `ollama` (local Ollama server via `OLLAMA_*` settings),

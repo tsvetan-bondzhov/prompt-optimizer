@@ -36,6 +36,7 @@ from app.core.registry import (
     get_grader,
     get_llm_runner,
 )
+from app.llm.base import ConfiguredLLMRunner
 from app.db.repositories.reports import (
     EvaluationReportRepository,
     EvaluationRunRepository,
@@ -169,9 +170,12 @@ class EvaluatorService:
             executors_by_case[test_case.id] = self._executor_resolver(
                 test_case.executor_name
             )
-            runners_by_case[test_case.id] = self._llm_runner_resolver(
-                test_case.executor_llm_runner
-            )
+            runner = self._llm_runner_resolver(test_case.executor_llm_runner)
+            if test_case.executor_llm_runner_options:
+                runner = ConfiguredLLMRunner(
+                    runner, test_case.executor_llm_runner_options
+                )
+            runners_by_case[test_case.id] = runner
             graders_by_case[test_case.id] = [
                 self._grader_resolver(name) for name in test_case.grader_names
             ]

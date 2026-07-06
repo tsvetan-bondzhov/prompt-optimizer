@@ -34,6 +34,27 @@ DEFAULT_TIMEOUT_SECONDS: float = 120.0
 class ClaudeCodeRunner(LLMRunner):
     """Run prompts through the Claude Code CLI in headless (``-p``) mode."""
 
+    options_schema = [
+        {
+            "name": "model",
+            "label": "Model name",
+            "type": "text",
+            "default": "claude-sonnet-4-6",
+        },
+        {
+            "name": "effort",
+            "label": "Effort",
+            "type": "text",
+            "default": "",
+        },
+        {
+            "name": "temperature",
+            "label": "Temperature",
+            "type": "number",
+            "default": "",
+        },
+    ]
+
     def __init__(
         self,
         cli_path: str | None = None,
@@ -58,15 +79,29 @@ class ClaudeCodeRunner(LLMRunner):
         self._timeout = timeout
         self._extra_args = list(extra_args or [])
 
-    async def run(self, system_prompt: str, user_prompt: str) -> str:
+    async def run(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        options: dict | None = None,
+    ) -> str:
         """Invoke ``claude -p`` with the composed prompt; return stdout text.
+
+        ``options`` (all optional, empty values ignored): ``model`` maps to
+        ``--model``, ``effort`` to ``--effort``, ``temperature`` to
+        ``--temperature``.
 
         Raises :class:`LLMRunnerError` if the CLI is missing, exits non-zero, or
         does not complete within the configured timeout.
         """
 
         prompt = compose_prompt(system_prompt, user_prompt)
-        args = [self._cli_path, *self._extra_args, "-p"]
+        args = [
+            self._cli_path,
+            *self._extra_args,
+            *option_args(options),
+            "-p",
+        ]
 
         try:
             process = await asyncio.create_subprocess_exec(
@@ -147,6 +182,28 @@ class ClaudeCodeRunner(LLMRunner):
             f"Claude Code CLI not found at {self._cli_path!r}. "
             "Set CLAUDE_CLI_PATH to a valid executable."
         )
+
+
+def option_args(options: dict | None) -> list[str]:
+    """Translate runner options into Claude Code CLI arguments.
+
+    Empty/missing values are ignored: ``model`` -> ``--model``, ``effort`` ->
+    ``--effort``, ``temperature`` -> ``--temperature``.
+    """
+
+    if not options:
+        return []
+    args: list[str] = []
+    for key, flag in (
+        ("model", "--model"),
+        ("effort", "--effort"),
+        ("temperature", "--temperature"),
+    ):
+        value = options.get(key)
+        if value is None or str(value).strip() == "":
+            continue
+        args.extend([flag, str(value)])
+    return args
 
 
 def _terminate(process: asyncio.subprocess.Process) -> None:

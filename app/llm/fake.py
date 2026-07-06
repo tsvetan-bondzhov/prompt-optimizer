@@ -21,7 +21,12 @@ class FakeLLMRunner(LLMRunner):
 
         self._prefix = prefix
 
-    async def run(self, system_prompt: str, user_prompt: str) -> str:
+    async def run(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        options: dict | None = None,
+    ) -> str:
         """Echo the composed prompt deterministically, with no external calls."""
 
         return f"{self._prefix} {compose_prompt(system_prompt, user_prompt)}".strip()
