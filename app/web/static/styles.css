@@ -110,7 +110,13 @@ pre.prompt {
   font-size: 0.85rem;
 }
 pre.prompt.small { max-height: 140px; overflow-y: auto; font-size: 0.78rem; }
-pre.prompt.diff { color: #93c5fd; }
+pre.prompt.diff { color: #e2e8f0; }
+pre.prompt.diff span { display: inline-block; width: 100%; }
+pre.prompt.diff .diff-add { color: #86efac; background: rgba(34, 197, 94, 0.15); }
+pre.prompt.diff .diff-del { color: #fca5a5; background: rgba(239, 68, 68, 0.15); }
+pre.prompt.diff .diff-hunk { color: #93c5fd; }
+pre.prompt.diff .diff-file { color: #94a3b8; font-weight: 700; }
+pre.prompt.diff .diff-ctx { color: #cbd5e1; }
 
 form.stacked label { display: block; margin-bottom: 1rem; font-weight: 600; }
 form.stacked input[type="text"], form.stacked input[type="number"],

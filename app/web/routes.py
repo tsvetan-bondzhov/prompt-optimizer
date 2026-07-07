@@ -721,7 +721,7 @@ async def optimization_step_detail_page(
     if step is None:
         raise HTTPException(status_code=404, detail="Step not found.")
     names = await _test_case_names(step.get("test_case_ids", []), test_cases)
-    diff = "\n".join(
+    diff_lines = list(
         difflib.unified_diff(
             (step.get("previous_prompt") or "").splitlines(),
             (step.get("proposed_prompt") or "").splitlines(),
@@ -735,5 +735,5 @@ async def optimization_step_detail_page(
         "optimization_step_detail.html",
         step=step,
         test_case_names=names,
-        prompt_diff=diff,
+        diff_lines=diff_lines,
     )

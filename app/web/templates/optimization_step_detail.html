@@ -37,10 +37,11 @@
   </div>
 </div>
 
-{% if prompt_diff %}
+{% if diff_lines %}
 <section>
   <h2>Diff</h2>
-  <pre class="prompt diff">{{ prompt_diff }}</pre>
+  <pre class="prompt diff">{% for line in diff_lines %}{% if line.startswith('+++') or line.startswith('---') %}<span class="diff-file">{{ line }}</span>{% elif line.startswith('@@') %}<span class="diff-hunk">{{ line }}</span>{% elif line.startswith('+') %}<span class="diff-add">{{ line }}</span>{% elif line.startswith('-') %}<span class="diff-del">{{ line }}</span>{% else %}<span class="diff-ctx">{{ line }}</span>{% endif %}
+{% endfor %}</pre>
 </section>
 {% endif %}
 
