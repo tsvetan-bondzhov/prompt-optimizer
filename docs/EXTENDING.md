@@ -119,7 +119,10 @@ Built-in graders: `keyword_coverage`, `response_quality`
 (`app/implementations/graders.py`), `json_schema`, `json_expected_match`
 (`app/implementations/json_graders.py`), `word_count`
 (`app/implementations/word_count_grader.py` — eq/gt/lt/gte/lte conditions
-with a response/prompt/total mode), and `model_grader`
+with a response/prompt/total mode), `tiktoken`
+(`app/implementations/tiktoken_grader.py` — token budget scored 10 at/below
+a `target`, 1 above a `limit`, linear in between; same response/prompt/total
+modes, encoding configurable via `encoding`/`model`), and `model_grader`
 (`app/implementations/model_grader.py`).
 
 ### The model grader (LLM-as-judge)
