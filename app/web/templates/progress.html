@@ -27,6 +27,14 @@
     <h3>Current step</h3>
     <p id="current-step" class="muted">—</p>
   </div>
+  {% if kind == 'optimization' %}
+  <div class="card">
+    <h3>Iterations</h3>
+    <div class="progress-bar"><div id="iteration-fill" class="progress-fill"></div></div>
+    <p><span id="iteration-count" class="muted">0 / {{ run.config.max_iterations }} iterations</span></p>
+    <p class="muted">Latest avg score: <span id="iteration-score" class="score">—</span></p>
+  </div>
+  {% endif %}
 </div>
 
 <section>

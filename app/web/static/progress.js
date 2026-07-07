@@ -16,6 +16,9 @@
   var countEl = document.getElementById("progress-count");
   var stepEl = document.getElementById("current-step");
   var logEl = document.getElementById("event-log");
+  var iterFillEl = document.getElementById("iteration-fill");
+  var iterCountEl = document.getElementById("iteration-count");
+  var iterScoreEl = document.getElementById("iteration-score");
 
   function setStatus(status) {
     if (!status || !statusEl) return;
@@ -35,6 +38,30 @@
 
   function setCurrentStep(text) {
     if (text && stepEl) stepEl.textContent = text;
+  }
+
+  /* Iterations card (optimization runs): fed by "iteration_done" events,
+   * which carry executed / total as iteration counts plus the current best
+   * avg_score. Replayed snapshot events rebuild it on page reload. */
+  function setIterations(ev) {
+    if (ev.type !== "iteration_done") {
+      if (ev.type === "run_completed" && ev.avg_score != null && iterScoreEl) {
+        iterScoreEl.textContent = Number(ev.avg_score).toFixed(2);
+      }
+      return;
+    }
+    var executed = ev.executed || 0;
+    var total = ev.total || 0;
+    if (iterCountEl) {
+      iterCountEl.textContent = executed + " / " + (total || "?") + " iterations";
+    }
+    if (iterFillEl && total > 0) {
+      iterFillEl.style.width =
+        Math.min(100, Math.round((executed / total) * 100)) + "%";
+    }
+    if (iterScoreEl && ev.avg_score != null) {
+      iterScoreEl.textContent = Number(ev.avg_score).toFixed(2);
+    }
   }
 
   function addLogRow(ev) {
@@ -65,6 +92,7 @@
   function applyEvent(ev) {
     setProgress(ev.executed, ev.total);
     setCurrentStep(ev.current_state);
+    setIterations(ev);
     if (ev.type === "run_completed") setStatus("completed");
     else if (ev.type === "error") setStatus("failed");
     else setStatus("running");
@@ -78,7 +106,10 @@
     setStatus(snap.status);
     setProgress(snap.executed, snap.total);
     setCurrentStep(snap.current_state || snap.current_step);
-    (snap.events || []).forEach(addLogRow);
+    (snap.events || []).forEach(function (ev) {
+      addLogRow(ev);
+      setIterations(ev);
+    });
     if (snap.status === "completed" || snap.status === "failed") source.close();
   });
 
