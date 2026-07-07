@@ -50,9 +50,15 @@ from app.models import (
 router = APIRouter(include_in_schema=False)
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
+STATIC_DIR = Path(__file__).parent / "static"
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 templates.env.filters["tojson_pretty"] = lambda value: json.dumps(
     value, indent=2, default=str
+)
+# Cache-busting version for /static assets: browsers heuristically cache JS/CSS
+# without revalidating, so stale scripts survive deploys unless the URL changes.
+templates.env.globals["static_v"] = str(
+    int(max(p.stat().st_mtime for p in STATIC_DIR.glob("*")))
 )
 
 

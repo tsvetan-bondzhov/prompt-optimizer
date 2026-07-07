@@ -56,5 +56,5 @@
   window.RUN_ID = {{ run_id|tojson }};
   window.RUN_KIND = {{ kind|tojson }};
 </script>
-<script src="/static/progress.js"></script>
+<script src="/static/progress.js?v={{ static_v }}"></script>
 {% endblock %}

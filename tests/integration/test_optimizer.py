@@ -184,6 +184,11 @@ async def test_nested_evaluation_completion_does_not_terminate_run(db):
     assert events[-1].type is ProgressEventType.RUN_COMPLETED
     iterations = [e for e in events if e.type is ProgressEventType.ITERATION_DONE]
     assert len(iterations) == 3
+    # The iterations card consumes these fields from the serialized frame.
+    assert [e.executed for e in iterations] == [1, 2, 3]
+    assert all(e.total == 5 for e in iterations)
+    assert all(getattr(e, "avg_score", None) is not None for e in iterations)
+    assert '"avg_score":' in iterations[-1].model_dump_json()
 
 
 async def test_missing_prompt_raises(db):

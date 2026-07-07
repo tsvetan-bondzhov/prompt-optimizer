@@ -48,7 +48,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/runner_options.js"></script>
+<script src="/static/runner_options.js?v={{ static_v }}"></script>
 <script>
   window.LLM_RUNNER_OPTIONS = {{ llm_runner_options_map|tojson }};
   initRunnerOptions(
