@@ -17,7 +17,11 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request,
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from app.api.background import execute_evaluation_run, execute_optimization_run
+from app.api.background import (
+    cancel_run,
+    execute_evaluation_run,
+    execute_optimization_run,
+)
 from app.api.deps import (
     get_evaluation_run_repository,
     get_optimization_run_repository,
@@ -673,6 +677,39 @@ async def run_progress_page(
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found.")
     return _render(request, "progress.html", run=run, run_id=run_id, kind=kind)
+
+
+@router.post("/runs/{run_id}/stop")
+async def run_stop(
+    request: Request,
+    run_id: str,
+    opt_runs: OptimizationRunRepository = Depends(get_optimization_run_repository),
+    eval_runs: EvaluationRunRepository = Depends(get_evaluation_run_repository),
+) -> RedirectResponse:
+    """Stop a running evaluation / optimization run."""
+
+    run = await opt_runs.get(run_id)
+    repo: Any = opt_runs
+    if run is None:
+        run = await eval_runs.get(run_id)
+        repo = eval_runs
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found.")
+
+    # A live task cleans up (status + terminal event) in its wrapper; without
+    # one (finished, or the process restarted mid-run) fix the record here.
+    if not cancel_run(run_id) and run.get("status") in (
+        RunStatus.PENDING.value,
+        RunStatus.RUNNING.value,
+    ):
+        await repo.update(
+            run_id,
+            {"status": RunStatus.CANCELLED.value, "error": "Stopped by user."},
+        )
+        await request.app.state.progress_tracker.publish(
+            run_id, {"event": "run_cancelled", "current_step": "cancelled"}
+        )
+    return RedirectResponse(f"/runs/{run_id}", status_code=status.HTTP_303_SEE_OTHER)
 
 
 # --------------------------------------------------------------------------

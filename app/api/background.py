@@ -15,7 +15,9 @@ Routes that start a long-running job follow the same pattern:
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
@@ -34,9 +36,73 @@ from app.services.optimizer import OptimizerService, summarizer_runner_selection
 from app.services.progress import ProgressTracker
 from app.services.summarizer import SummarizerService
 
-__all__ = ["execute_evaluation_run", "execute_optimization_run"]
+__all__ = ["execute_evaluation_run", "execute_optimization_run", "cancel_run"]
 
 logger = logging.getLogger(__name__)
+
+# Live background work keyed by run_id, so a stop request can cancel it.
+# Single-process registry (runs execute in this process's event loop).
+_RUNNING_TASKS: dict[str, asyncio.Task] = {}
+
+
+def cancel_run(run_id: str) -> bool:
+    """Request cancellation of a live background run.
+
+    :returns: ``True`` when a running task was found and told to cancel — its
+        wrapper then marks the run ``cancelled`` and emits the terminal
+        progress event. ``False`` when no live task exists (already finished,
+        or the process restarted); callers should fall back to fixing the
+        persisted status themselves.
+    """
+
+    task = _RUNNING_TASKS.get(run_id)
+    if task is None or task.done():
+        return False
+    task.cancel()
+    return True
+
+
+async def _run_cancellable(
+    run_id: str,
+    body: Awaitable[None],
+    on_cancelled: Callable[[], Awaitable[None]],
+) -> None:
+    """Await ``body`` as a registered task so :func:`cancel_run` can stop it.
+
+    A user-initiated cancel lands here as the inner task's ``CancelledError``;
+    the run is then marked cancelled via ``on_cancelled``. Cancellation of the
+    *outer* task (server shutdown) is propagated untouched.
+    """
+
+    task = asyncio.ensure_future(body)
+    _RUNNING_TASKS[run_id] = task
+    try:
+        await task
+    except asyncio.CancelledError:
+        if not task.cancelled():  # outer cancellation, not a user stop
+            task.cancel()
+            raise
+        logger.info("Run %s cancelled by user", run_id)
+        try:
+            await on_cancelled()
+        except Exception:  # noqa: BLE001 - cleanup must not raise
+            logger.exception("Failed to mark run %s cancelled", run_id)
+    finally:
+        _RUNNING_TASKS.pop(run_id, None)
+
+
+async def _mark_cancelled(
+    runs, tracker: ProgressTracker, run_id: str
+) -> None:
+    """Persist the ``cancelled`` status and publish the terminal event."""
+
+    await runs.update(
+        run_id,
+        {"status": RunStatus.CANCELLED.value, "error": "Stopped by user."},
+    )
+    await tracker.publish(
+        run_id, {"event": "run_cancelled", "current_step": "cancelled"}
+    )
 
 
 async def execute_evaluation_run(
@@ -65,34 +131,39 @@ async def execute_evaluation_run(
     runs = EvaluationRunRepository(db)
     evaluator = EvaluatorService(EvaluationReportRepository(db), runs)
 
-    try:
-        await runs.update(run_id, {"status": RunStatus.RUNNING.value})
-        result = await evaluator.run(
-            PromptText(text=prompt_text),
-            test_cases,
-            executions_per_test_case,
-            run_id=run_id,
-            progress=tracker.make_hook(run_id),
-            prompt_name=prompt_name,
-        )
-        await runs.update(
-            run_id,
-            {
-                "status": RunStatus.COMPLETED.value,
-                "avg_score": result.avg_score,
-                "metadata": {"report_ids": result.report_ids},
-            },
-        )
-        if update_prompt and prompt_id is not None:
-            await _apply_evaluation_to_prompt(
-                db, prompt_id, prompt_text, test_cases, result
+    async def _body() -> None:
+        try:
+            await runs.update(run_id, {"status": RunStatus.RUNNING.value})
+            result = await evaluator.run(
+                PromptText(text=prompt_text),
+                test_cases,
+                executions_per_test_case,
+                run_id=run_id,
+                progress=tracker.make_hook(run_id),
+                prompt_name=prompt_name,
             )
-    except Exception as exc:  # noqa: BLE001 - background jobs must not raise
-        logger.exception("Standalone evaluation run %s failed", run_id)
-        await runs.update(
-            run_id, {"status": RunStatus.FAILED.value, "error": str(exc)}
-        )
-        await _emit_error(tracker, run_id, exc)
+            await runs.update(
+                run_id,
+                {
+                    "status": RunStatus.COMPLETED.value,
+                    "avg_score": result.avg_score,
+                    "metadata": {"report_ids": result.report_ids},
+                },
+            )
+            if update_prompt and prompt_id is not None:
+                await _apply_evaluation_to_prompt(
+                    db, prompt_id, prompt_text, test_cases, result
+                )
+        except Exception as exc:  # noqa: BLE001 - background jobs must not raise
+            logger.exception("Standalone evaluation run %s failed", run_id)
+            await runs.update(
+                run_id, {"status": RunStatus.FAILED.value, "error": str(exc)}
+            )
+            await _emit_error(tracker, run_id, exc)
+
+    await _run_cancellable(
+        run_id, _body(), lambda: _mark_cancelled(runs, tracker, run_id)
+    )
 
 
 async def _apply_evaluation_to_prompt(
@@ -155,10 +226,17 @@ async def execute_optimization_run(
         progress=tracker,
     )
 
-    try:
-        await optimizer.optimize(prompt_id, config, run_id=run_id)
-    except Exception:  # noqa: BLE001 - already recorded by the optimizer
-        logger.exception("Optimization run %s failed", run_id)
+    async def _body() -> None:
+        try:
+            await optimizer.optimize(prompt_id, config, run_id=run_id)
+        except Exception:  # noqa: BLE001 - already recorded by the optimizer
+            logger.exception("Optimization run %s failed", run_id)
+
+    await _run_cancellable(
+        run_id,
+        _body(),
+        lambda: _mark_cancelled(OptimizationRunRepository(db), tracker, run_id),
+    )
 
 
 async def _emit_error(

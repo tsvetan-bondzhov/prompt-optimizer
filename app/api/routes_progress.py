@@ -77,6 +77,7 @@ async def stream_progress(
                 }
                 if event.type in (
                     ProgressEventType.RUN_COMPLETED,
+                    ProgressEventType.RUN_CANCELLED,
                     ProgressEventType.ERROR,
                 ):
                     return

@@ -97,7 +97,10 @@ The suite runs entirely offline (mongomock + deterministic fakes; no LLM calls).
    accepted iteration first snapshots the outgoing prompt version, and the
    run's iterations page lists the versions it saved.
 5. **Progress** (`/runs/{run_id}`) — live SSE progress; reloading the page
-   rebuilds the report from persisted progress.
+   rebuilds the report from persisted progress. Running evaluations and
+   optimizations can be terminated with the **Stop** button (the run is
+   marked `cancelled`); completed evaluations offer a **Repeat evaluation**
+   button.
 
 Everything is also available as a JSON API under `/api` (see `/docs` for the
 OpenAPI UI).

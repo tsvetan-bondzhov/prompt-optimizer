@@ -20,12 +20,16 @@
   var iterCountEl = document.getElementById("iteration-count");
   var iterScoreEl = document.getElementById("iteration-score");
 
+  var TERMINAL = { completed: true, failed: true, cancelled: true };
+
   function setStatus(status) {
     if (!status || !statusEl) return;
     statusEl.textContent = status;
     statusEl.className = "status status-" + status;
     var repeatEl = document.getElementById("repeat-evaluation");
     if (repeatEl && status === "completed") repeatEl.hidden = false;
+    var stopEl = document.getElementById("stop-run");
+    if (stopEl) stopEl.hidden = !!TERMINAL[status];
   }
 
   function setProgress(executed, total) {
@@ -83,7 +87,11 @@
       var td = document.createElement("td");
       td.textContent = text;
       if (i === 1) {
-        var cls = { run_completed: "status-completed", error: "status-failed" }[ev.type];
+        var cls = {
+          run_completed: "status-completed",
+          run_cancelled: "status-cancelled",
+          error: "status-failed",
+        }[ev.type];
         if (cls) td.innerHTML = '<span class="status ' + cls + '">' + ev.type + "</span>";
       }
       tr.appendChild(td);
@@ -96,6 +104,7 @@
     setCurrentStep(ev.current_state);
     setIterations(ev);
     if (ev.type === "run_completed") setStatus("completed");
+    else if (ev.type === "run_cancelled") setStatus("cancelled");
     else if (ev.type === "error") setStatus("failed");
     else setStatus("running");
     addLogRow(ev);
@@ -112,19 +121,26 @@
       addLogRow(ev);
       setIterations(ev);
     });
-    if (snap.status === "completed" || snap.status === "failed") source.close();
+    if (TERMINAL[snap.status]) source.close();
   });
 
-  ["step_started", "step_completed", "iteration_done", "run_completed", "error"].forEach(
-    function (type) {
-      source.addEventListener(type, function (e) {
-        var ev = JSON.parse(e.data);
-        ev.type = ev.type || type;
-        applyEvent(ev);
-        if (type === "run_completed" || type === "error") source.close();
-      });
-    }
-  );
+  [
+    "step_started",
+    "step_completed",
+    "iteration_done",
+    "run_completed",
+    "run_cancelled",
+    "error",
+  ].forEach(function (type) {
+    source.addEventListener(type, function (e) {
+      var ev = JSON.parse(e.data);
+      ev.type = ev.type || type;
+      applyEvent(ev);
+      if (type === "run_completed" || type === "run_cancelled" || type === "error") {
+        source.close();
+      }
+    });
+  });
 
   source.onerror = function () {
     // The server closes the stream on terminal runs; nothing to do.

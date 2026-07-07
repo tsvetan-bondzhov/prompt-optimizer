@@ -70,6 +70,7 @@ class ProgressEventType(str, Enum):
     STEP_COMPLETED = "step_completed"
     ITERATION_DONE = "iteration_done"
     RUN_COMPLETED = "run_completed"
+    RUN_CANCELLED = "run_cancelled"
     ERROR = "error"
 
 
@@ -128,6 +129,8 @@ _RAW_EVENT_TYPE_MAP: dict[str, ProgressEventType] = {
     "iteration_done": ProgressEventType.ITERATION_DONE,
     "completed": ProgressEventType.RUN_COMPLETED,
     "run_completed": ProgressEventType.RUN_COMPLETED,
+    "cancelled": ProgressEventType.RUN_CANCELLED,
+    "run_cancelled": ProgressEventType.RUN_CANCELLED,
     "error": ProgressEventType.ERROR,
 }
 
@@ -137,6 +140,7 @@ _STATUS_BY_TYPE: dict[ProgressEventType, str] = {
     ProgressEventType.STEP_COMPLETED: "running",
     ProgressEventType.ITERATION_DONE: "running",
     ProgressEventType.RUN_COMPLETED: "completed",
+    ProgressEventType.RUN_CANCELLED: "cancelled",
     ProgressEventType.ERROR: "failed",
 }
 
@@ -267,7 +271,10 @@ class ProgressTracker:
             while True:
                 event = await queue.get()
                 yield event
-                if event.type is ProgressEventType.RUN_COMPLETED:
+                if event.type in (
+                    ProgressEventType.RUN_COMPLETED,
+                    ProgressEventType.RUN_CANCELLED,
+                ):
                     break
         finally:
             self.unsubscribe(run_id, queue)
