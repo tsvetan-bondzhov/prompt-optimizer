@@ -23,6 +23,7 @@ from app.api.deps import (
     get_optimization_run_repository,
     get_report_repository,
     get_prompt_repository,
+    get_prompt_version_repository,
     get_step_repository,
     get_test_case_repository,
 )
@@ -33,6 +34,7 @@ from app.db.repositories import (
     EvaluationRunRepository,
     OptimizationRunRepository,
     PromptRepository,
+    PromptVersionRepository,
     OptimizationStepRepository,
     TestCaseRepository,
 )
@@ -366,6 +368,7 @@ async def prompt_page(
     repo: PromptRepository = Depends(get_prompt_repository),
     test_cases: TestCaseRepository = Depends(get_test_case_repository),
     opt_runs: OptimizationRunRepository = Depends(get_optimization_run_repository),
+    versions: PromptVersionRepository = Depends(get_prompt_version_repository),
 ) -> HTMLResponse:
     prompt = await repo.get(prompt_id)
     if prompt is None:
@@ -377,6 +380,7 @@ async def prompt_page(
         prompt=prompt,
         linked_test_cases=linked,
         runs=await opt_runs.list_by_prompt(prompt_id, limit=20),
+        versions=await versions.list_by_prompt(prompt_id, limit=100),
     )
 
 
@@ -437,9 +441,33 @@ async def prompt_update(
 async def prompt_delete(
     prompt_id: str,
     repo: PromptRepository = Depends(get_prompt_repository),
+    versions: PromptVersionRepository = Depends(get_prompt_version_repository),
 ) -> RedirectResponse:
     await repo.delete(prompt_id)
+    await versions.delete_by_prompt(prompt_id)
     return RedirectResponse("/prompts", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.get(
+    "/prompts/{prompt_id}/versions/{version_id}", response_class=HTMLResponse
+)
+async def prompt_version_page(
+    request: Request,
+    prompt_id: str,
+    version_id: str,
+    repo: PromptRepository = Depends(get_prompt_repository),
+    versions: PromptVersionRepository = Depends(get_prompt_version_repository),
+) -> HTMLResponse:
+    version = await versions.get(version_id)
+    if version is None or version.get("prompt_id") != prompt_id:
+        raise HTTPException(status_code=404, detail="Prompt version not found.")
+    prompt = await repo.get(prompt_id)
+    return _render(
+        request,
+        "prompt_version_detail.html",
+        version=version,
+        prompt=prompt,
+    )
 
 
 # --------------------------------------------------------------------------
@@ -663,6 +691,7 @@ async def optimization_steps_page(
     opt_runs: OptimizationRunRepository = Depends(get_optimization_run_repository),
     steps: OptimizationStepRepository = Depends(get_step_repository),
     test_cases: TestCaseRepository = Depends(get_test_case_repository),
+    versions: PromptVersionRepository = Depends(get_prompt_version_repository),
 ) -> HTMLResponse:
     run = await opt_runs.get(run_id)
     if run is None:
@@ -677,6 +706,7 @@ async def optimization_steps_page(
         run_id=run_id,
         steps=step_docs,
         test_case_names=names,
+        versions=await versions.list_by_run(run_id),
     )
 
 

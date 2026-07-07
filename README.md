@@ -80,7 +80,10 @@ The suite runs entirely offline (mongomock + deterministic fakes; no LLM calls).
    delete prompts. A prompt has a **name** (shown in reports and tables), a
    goal, the current prompt text, linked test cases, and the LLM runner used
    by the optimizer. The prompt tracks the best text found so far, its
-   average score, and the latest strengths/weaknesses summary.
+   average score, and the latest strengths/weaknesses summary. Superseded
+   versions (text + average score) are kept: whenever the optimizer accepts
+   an improved prompt the outgoing version is saved, and the prompt page
+   lists all versions with a details link.
 3. **Run a standalone evaluation** (`/evaluate`) — pick a prompt (or paste
    prompt text), test cases, and `executions per test case`; the run page
    shows live progress and links to the produced evaluation reports (date,
@@ -90,7 +93,9 @@ The suite runs entirely offline (mongomock + deterministic fakes; no LLM calls).
    score / max iterations / executions per test case. Every iteration persists
    an optimization step (previous & proposed prompt, previous & new average
    score, summary, links to all evaluation reports) whether accepted or
-   rejected. The prompt only advances on a strictly better score.
+   rejected. The prompt only advances on a strictly better score; each
+   accepted iteration first snapshots the outgoing prompt version, and the
+   run's steps page lists the versions it saved.
 5. **Progress** (`/runs/{run_id}`) — live SSE progress; reloading the page
    rebuilds the report from persisted progress.
 

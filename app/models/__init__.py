@@ -15,6 +15,7 @@ from app.models.optimization import (
     OptimizationContext,
     OptimizationRun,
     Prompt,
+    PromptVersion,
     OptimizationStep,
     RunConfig,
     RunProgress,
@@ -42,6 +43,7 @@ __all__ = [
     "EvaluationSummary",
     # optimization
     "Prompt",
+    "PromptVersion",
     "OptimizationRun",
     "OptimizationStep",
     "OptimizationContext",

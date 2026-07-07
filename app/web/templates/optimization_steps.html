@@ -41,4 +41,23 @@
 {% else %}
 <p class="muted">No steps yet — the run may still be in progress.</p>
 {% endif %}
+
+<section>
+  <h2>Prompt versions saved by this run</h2>
+  {% if versions %}
+  <table>
+    <thead><tr><th>Version</th><th>Avg score</th><th>Saved</th><th></th></tr></thead>
+    <tbody>
+      {% for v in versions %}
+      <tr>
+        <td>v{{ v.version_number }}</td>
+        <td>{% if v.avg_score is not none %}<span class="score">{{ '%.2f'|format(v.avg_score) }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td class="muted">{{ v.created_at }}</td>
+        <td><a class="btn small" href="/prompts/{{ v.prompt_id }}/versions/{{ v.id }}">Details</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted">No versions saved — versions are preserved when an iteration is accepted.</p>{% endif %}
+</section>
 {% endblock %}

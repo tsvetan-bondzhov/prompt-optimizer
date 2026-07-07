@@ -42,11 +42,13 @@ from app.db.repositories.runs import OptimizationRunRepository
 from app.db.repositories.prompts import PromptRepository
 from app.db.repositories.steps import OptimizationStepRepository
 from app.db.repositories.test_cases import TestCaseRepository
+from app.db.repositories.versions import PromptVersionRepository
 from app.models import (
     EvaluationSummary,
     OptimizationContext,
     OptimizationRun,
     Prompt,
+    PromptVersion,
     OptimizationStep,
     PromptText,
     RunConfig,
@@ -80,6 +82,7 @@ class OptimizerService:
         test_case_repository: TestCaseRepository,
         *,
         report_repository: Optional[EvaluationReportRepository] = None,
+        version_repository: Optional[PromptVersionRepository] = None,
         optimizer_resolver: OptimizerResolver = get_prompt_optimizer,
         progress: Optional[ProgressTracker] = None,
     ) -> None:
@@ -91,6 +94,9 @@ class OptimizerService:
         :param test_case_repository: Resolves ``prompt.test_case_ids`` to test cases.
         :param report_repository: Optional reports repo (reports are persisted by
             the evaluator; injected for API completeness / future use).
+        :param version_repository: Optional versions repo — when provided, the
+            superseded prompt text + score are snapshotted as a
+            :class:`PromptVersion` on every accepted iteration.
         :param optimizer_resolver: Returns the active :class:`PromptOptimizer`.
         :param progress: Optional :class:`ProgressTracker` for live events.
         """
@@ -102,6 +108,7 @@ class OptimizerService:
         self._steps = step_repository
         self._test_cases = test_case_repository
         self._reports = report_repository
+        self._versions = version_repository
         self._optimizer_resolver = optimizer_resolver
         self._progress = progress
 
@@ -352,10 +359,26 @@ class OptimizerService:
         )
         await self._steps.create(step.model_dump())
 
-        # 5. Advance the best prompt only on a strictly better score.
+        # 5. Advance the best prompt only on a strictly better score,
+        #    preserving the outgoing version first.
         if accepted:
+            await self._snapshot_version(prompt, run_id)
             self._apply_summary(prompt, new_avg, summary, current_prompt=proposed.text)
             await self._persist_prompt(prompt)
+
+    async def _snapshot_version(self, prompt: Prompt, run_id: str) -> None:
+        """Persist ``prompt``'s current text + score as a :class:`PromptVersion`."""
+
+        if self._versions is None:
+            return
+        version = PromptVersion(
+            prompt_id=prompt.id,
+            version_number=await self._versions.next_version_number(prompt.id),
+            prompt_text=prompt.current_prompt,
+            avg_score=prompt.avg_score,
+            run_id=run_id,
+        )
+        await self._versions.create(version.model_dump())
 
     # -- prompt mutation helpers ----------------------------------------------
 

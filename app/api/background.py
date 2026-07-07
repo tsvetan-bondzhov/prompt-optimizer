@@ -24,6 +24,7 @@ from app.db.repositories import (
     EvaluationRunRepository,
     OptimizationRunRepository,
     PromptRepository,
+    PromptVersionRepository,
     OptimizationStepRepository,
     TestCaseRepository,
 )
@@ -150,6 +151,7 @@ async def execute_optimization_run(
         OptimizationStepRepository(db),
         TestCaseRepository(db),
         report_repository=EvaluationReportRepository(db),
+        version_repository=PromptVersionRepository(db),
         progress=tracker,
     )
 

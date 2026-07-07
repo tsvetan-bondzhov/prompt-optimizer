@@ -11,9 +11,17 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.api.deps import get_prompt_repository, get_test_case_repository
-from app.db.repositories import PromptRepository, TestCaseRepository
-from app.models import Prompt
+from app.api.deps import (
+    get_prompt_repository,
+    get_prompt_version_repository,
+    get_test_case_repository,
+)
+from app.db.repositories import (
+    PromptRepository,
+    PromptVersionRepository,
+    TestCaseRepository,
+)
+from app.models import Prompt, PromptVersion
 
 router = APIRouter(prefix="/api/prompts", tags=["prompts"])
 
@@ -131,9 +139,42 @@ async def update_prompt(
 async def delete_prompt(
     prompt_id: str,
     repo: PromptRepository = Depends(get_prompt_repository),
+    versions: PromptVersionRepository = Depends(get_prompt_version_repository),
 ) -> None:
     if not await repo.delete(prompt_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Prompt {prompt_id!r} not found.",
         )
+    await versions.delete_by_prompt(prompt_id)
+
+
+@router.get("/{prompt_id}/versions", response_model=list[PromptVersion])
+async def list_prompt_versions(
+    prompt_id: str,
+    skip: int = 0,
+    limit: int = 100,
+    repo: PromptRepository = Depends(get_prompt_repository),
+    versions: PromptVersionRepository = Depends(get_prompt_version_repository),
+) -> Any:
+    if await repo.get(prompt_id) is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Prompt {prompt_id!r} not found.",
+        )
+    return await versions.list_by_prompt(prompt_id, skip=skip, limit=limit)
+
+
+@router.get("/{prompt_id}/versions/{version_id}", response_model=PromptVersion)
+async def get_prompt_version(
+    prompt_id: str,
+    version_id: str,
+    versions: PromptVersionRepository = Depends(get_prompt_version_repository),
+) -> Any:
+    doc = await versions.get(version_id)
+    if doc is None or doc.get("prompt_id") != prompt_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Prompt version {version_id!r} not found.",
+        )
+    return doc

@@ -23,6 +23,7 @@ from app.db.repositories import (
     EvaluationRunRepository,
     OptimizationRunRepository,
     PromptRepository,
+    PromptVersionRepository,
     OptimizationStepRepository,
     TestCaseRepository,
 )
@@ -36,6 +37,7 @@ __all__ = [
     "get_progress_tracker",
     "get_test_case_repository",
     "get_prompt_repository",
+    "get_prompt_version_repository",
     "get_optimization_run_repository",
     "get_step_repository",
     "get_evaluation_run_repository",
@@ -74,6 +76,12 @@ def get_prompt_repository(
     db: AsyncIOMotorDatabase = Depends(get_db),
 ) -> PromptRepository:
     return PromptRepository(db)
+
+
+def get_prompt_version_repository(
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> PromptVersionRepository:
+    return PromptVersionRepository(db)
 
 
 def get_optimization_run_repository(
@@ -122,6 +130,7 @@ def get_optimizer_service(
     steps: OptimizationStepRepository = Depends(get_step_repository),
     test_cases: TestCaseRepository = Depends(get_test_case_repository),
     reports: EvaluationReportRepository = Depends(get_report_repository),
+    versions: PromptVersionRepository = Depends(get_prompt_version_repository),
     tracker: ProgressTracker = Depends(get_progress_tracker),
 ) -> OptimizerService:
     return OptimizerService(
@@ -132,5 +141,6 @@ def get_optimizer_service(
         steps,
         test_cases,
         report_repository=reports,
+        version_repository=versions,
         progress=tracker,
     )

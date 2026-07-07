@@ -20,6 +20,7 @@ from app.config import get_settings
 # Collection name constants (single source of truth, plan §5.1).
 COLLECTION_TEST_CASES = "test_cases"
 COLLECTION_PROMPTS = "prompts"
+COLLECTION_PROMPT_VERSIONS = "prompt_versions"
 COLLECTION_OPTIMIZATION_RUNS = "optimization_runs"
 COLLECTION_OPTIMIZATION_STEPS = "optimization_steps"
 COLLECTION_EVALUATION_RUNS = "evaluation_runs"
@@ -86,6 +87,7 @@ async def ensure_indexes(database: Optional[AsyncIOMotorDatabase] = None) -> Non
       - ``optimization_steps.run_id``
       - ``test_cases.created_at``
       - ``prompts.name``
+      - ``prompt_versions.prompt_id`` and ``prompt_versions.run_id``
 
     ``create_index`` is idempotent in MongoDB (re-creating an identical index is
     a no-op), so this is safe to call on every startup. An optional ``database``
@@ -98,3 +100,5 @@ async def ensure_indexes(database: Optional[AsyncIOMotorDatabase] = None) -> Non
     await db[COLLECTION_OPTIMIZATION_STEPS].create_index("run_id")
     await db[COLLECTION_TEST_CASES].create_index("created_at")
     await db[COLLECTION_PROMPTS].create_index("name")
+    await db[COLLECTION_PROMPT_VERSIONS].create_index("prompt_id")
+    await db[COLLECTION_PROMPT_VERSIONS].create_index("run_id")

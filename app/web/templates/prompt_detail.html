@@ -55,6 +55,26 @@
 {% endif %}
 
 <section>
+  <h2>Versions</h2>
+  {% if versions %}
+  <table>
+    <thead><tr><th>Version</th><th>Avg score</th><th>Saved</th><th>Run</th><th></th></tr></thead>
+    <tbody>
+      {% for v in versions %}
+      <tr>
+        <td>v{{ v.version_number }}</td>
+        <td>{% if v.avg_score is not none %}<span class="score">{{ '%.2f'|format(v.avg_score) }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td class="muted">{{ v.created_at }}</td>
+        <td>{% if v.run_id %}<a href="/runs/{{ v.run_id }}"><code>{{ v.run_id[:8] }}</code></a>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td><a class="btn small" href="/prompts/{{ prompt.id }}/versions/{{ v.id }}">Details</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted">No saved versions yet — accepted optimization iterations preserve the previous version here.</p>{% endif %}
+</section>
+
+<section>
   <h2>Optimization runs</h2>
   {% if runs %}
   <table>

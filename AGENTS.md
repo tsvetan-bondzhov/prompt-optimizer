@@ -37,7 +37,8 @@ double quotes, ~88 col, Google-style docstrings with `:param:`).
   score), `SummarizerService`, `ProgressTracker` (run_id-keyed pub/sub +
   persisted progress).
 - `app/db/` — Motor client (`client.py`, collection-name constants, indexes)
-  + repositories (`prompts`, `test_cases`, runs, steps, reports). Docs use
+  + repositories (`prompts`, `versions`, `test_cases`, runs, steps,
+  reports). Docs use
   string UUID4 ids (`_id` ↔ `id` mapping in `repositories/base.py`). No raw
   Mongo access outside repositories.
 - `app/api/` — JSON API under `/api` (`/api/prompts`, `/api/test-cases`,
@@ -60,6 +61,9 @@ double quotes, ~88 col, Google-style docstrings with `:param:`).
   (see `Grader.criteria_for`).
 - **Data entry** — one element of `TestCase.data`; executed and graded
   individually, the test case score is the mean over entries.
+- **Prompt version** — snapshot of a superseded prompt (text + avg score),
+  saved by the optimizer before an accepted iteration replaces
+  `current_prompt`; browsable from the prompt page and the run's steps page.
 
 ## Conventions / gotchas
 

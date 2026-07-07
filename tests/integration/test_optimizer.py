@@ -10,6 +10,7 @@ from app.db.repositories import (
     EvaluationRunRepository,
     OptimizationRunRepository,
     PromptRepository,
+    PromptVersionRepository,
     OptimizationStepRepository,
     TestCaseRepository,
 )
@@ -55,6 +56,7 @@ async def make_env(db, scores, *, avg_score=None):
         OptimizationRunRepository(db),
         OptimizationStepRepository(db),
         TestCaseRepository(db),
+        version_repository=PromptVersionRepository(db),
         optimizer_resolver=FakeOptimizer,
     )
     return optimizer, prompt
@@ -135,6 +137,34 @@ async def test_prompt_updated_only_on_acceptance(db):
     stored = await PromptRepository(db).get(prompt.id)
     assert stored["current_prompt"] == "base prompt"
     assert stored["avg_score"] == pytest.approx(8.0)
+
+
+async def test_accepted_iteration_snapshots_previous_version(db):
+    # Baseline 5; improvements score 7 and 9 — two accepted iterations, each
+    # preserving the outgoing prompt text + score as a version.
+    optimizer, prompt = await make_env(db, scores=(5, 7, 9))
+    await optimizer.optimize(prompt.id, RunConfig(target_score=9, max_iterations=10))
+
+    versions = await PromptVersionRepository(db).list_by_prompt(prompt.id)
+    assert [v["version_number"] for v in versions] == [2, 1]
+    first, second = versions[1], versions[0]
+    assert first["prompt_text"] == "base prompt"
+    assert first["avg_score"] == pytest.approx(5.0)
+    assert second["avg_score"] == pytest.approx(7.0)
+    assert second["prompt_text"] != "base prompt"
+
+    run = (await OptimizationRunRepository(db).list())[0]
+    assert all(v["run_id"] == run["id"] for v in versions)
+    assert await PromptVersionRepository(db).list_by_run(run["id"]) == list(
+        reversed(versions)
+    )
+
+
+async def test_rejected_iterations_save_no_version(db):
+    # Baseline 8; proposals score 8 (tie) twice — nothing accepted, no versions.
+    optimizer, prompt = await make_env(db, scores=(8, 8, 8))
+    await optimizer.optimize(prompt.id, RunConfig(target_score=10, max_iterations=2))
+    assert await PromptVersionRepository(db).list_by_prompt(prompt.id) == []
 
 
 async def test_missing_prompt_raises(db):

@@ -77,6 +77,28 @@ class Prompt(BaseModel):
     updated_at: datetime = Field(default_factory=utcnow)
 
 
+class PromptVersion(BaseModel):
+    """A superseded prompt version, snapshotted when the optimizer advances.
+
+    Before an accepted optimization iteration replaces ``current_prompt``, the
+    outgoing text and its measured average score are preserved here so the
+    prompt's history stays browsable.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(default_factory=new_id)
+    prompt_id: str
+    version_number: int = Field(..., ge=1)
+    prompt_text: str
+    avg_score: float | None = Field(default=None, ge=1, le=10)
+    run_id: str | None = Field(
+        default=None,
+        description="Optimization run whose accepted iteration superseded this version.",
+    )
+    created_at: datetime = Field(default_factory=utcnow)
+
+
 class RunProgress(BaseModel):
     """Persisted progress for a run (reconstructs status on page reload)."""
 

@@ -48,6 +48,22 @@ def test_prompt_rejects_unknown_test_cases(client):
     assert r.status_code == 400
 
 
+def test_prompt_versions_listing(client):
+    prompt = client.post(
+        "/api/prompts", json={"name": "p1", "goal": "g", "current_prompt": "p"}
+    ).json()
+
+    r = client.get(f"/api/prompts/{prompt['id']}/versions")
+    assert r.status_code == 200
+    assert r.json() == []
+
+    assert client.get("/api/prompts/missing/versions").status_code == 404
+    assert (
+        client.get(f"/api/prompts/{prompt['id']}/versions/missing").status_code
+        == 404
+    )
+
+
 def test_editing_prompt_resets_score(client):
     prompt = client.post(
         "/api/prompts", json={"name": "p1", "goal": "g", "current_prompt": "old"}
