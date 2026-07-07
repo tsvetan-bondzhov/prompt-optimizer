@@ -9,6 +9,10 @@
     <a class="btn" href="/prompts/{{ run.prompt_id }}">Back to prompt</a>
     {% else %}
     <a class="btn" href="/evaluations/{{ run_id }}/reports">View reports</a>
+    <form method="post" action="/evaluations/{{ run_id }}/repeat" class="inline"
+          id="repeat-evaluation" {% if run.status != 'completed' %}hidden{% endif %}>
+      <button class="btn primary" type="submit">Repeat evaluation</button>
+    </form>
     {% endif %}
   </div>
 </div>

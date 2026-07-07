@@ -548,6 +548,47 @@ async def run_evaluation_submit(
     )
 
 
+@router.post("/evaluations/{run_id}/repeat")
+async def run_evaluation_repeat(
+    request: Request,
+    run_id: str,
+    background_tasks: BackgroundTasks,
+    runs: EvaluationRunRepository = Depends(get_evaluation_run_repository),
+    test_case_repo: TestCaseRepository = Depends(get_test_case_repository),
+) -> RedirectResponse:
+    """Re-run a finished evaluation with the same prompt / test cases / N."""
+
+    previous = await runs.get(run_id)
+    if previous is None:
+        raise HTTPException(status_code=404, detail="Evaluation run not found.")
+    selected = await resolve_test_cases(
+        list(previous.get("test_case_ids") or []), test_case_repo
+    )
+    n = int(previous.get("executions_per_test_case") or 1)
+
+    run = EvaluationRun(
+        prompt=previous.get("prompt") or "",
+        prompt_name=previous.get("prompt_name"),
+        test_case_ids=[tc.id for tc in selected],
+        executions_per_test_case=n,
+        status=RunStatus.PENDING.value,
+    )
+    await runs.create(run.model_dump())
+    background_tasks.add_task(
+        execute_evaluation_run,
+        request.app.state.db,
+        request.app.state.progress_tracker,
+        run.id,
+        run.prompt,
+        selected,
+        n,
+        run.prompt_name,
+    )
+    return RedirectResponse(
+        f"/runs/{run.id}", status_code=status.HTTP_303_SEE_OTHER
+    )
+
+
 @router.get("/optimize", response_class=HTMLResponse)
 async def run_optimization_form(
     request: Request,

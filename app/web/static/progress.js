@@ -24,6 +24,8 @@
     if (!status || !statusEl) return;
     statusEl.textContent = status;
     statusEl.className = "status status-" + status;
+    var repeatEl = document.getElementById("repeat-evaluation");
+    if (repeatEl && status === "completed") repeatEl.hidden = false;
   }
 
   function setProgress(executed, total) {

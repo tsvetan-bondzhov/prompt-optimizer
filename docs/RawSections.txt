@@ -1,13 +1,42 @@
 "RawSection[title=Summary, lines=[tsekob@gmail.com Sofia, BulgariaTSVETAN, BONDZHOV]]"
+[ {
+  "firstName" : "Tsvetan",
+  "lastName" : "Bondzhov",
+  "text" : null,
+  "linkedInUrl" : null,
+  "personalPageUrl" : null,
+  "blogUrl" : null,
+  "contactEmail" : "tsekob@gmail.com",
+  "locationCountry" : "Bulgaria",
+  "locationCity" : "Sofia"
+} ]
+
 
 "RawSection[title=SUMMARY, lines=[Full-stack software engineer with proven experience in developing scalable, high-quality, applications. Quick learner with strong attention to detail and a passion for continuously, expanding technical expertise.]]"
+[ {
+  "firstName" : null,
+  "lastName" : null,
+  "text" : "Full-stack software engineer with proven experience in developing scalable, high-quality applications. Quick learner with strong attention to detail and a passion for continuously expanding technical expertise.",
+  "linkedInUrl" : null,
+  "personalPageUrl" : null,
+  "blogUrl" : null,
+  "contactEmail" : null,
+  "locationCountry" : null,
+  "locationCity" : null
+} ]
+
 
 
 RawSection[title=EXPERIENCE, lines=[Senior Software Engineer / Team Lead 08/2020 - Present, Concord EU Sofia, Bulgaria, Concord EU is a software company providing technology consulting services to, organizations across a variety of industries, Build robust, high-performance RESTful microservices using Spring Boot, Node.js, and, FastAPI, ensuring scalability, security, and high availability, Maintain code quality and enforce best practices, Collaborate with product owners to clarify and refine business requirements, Assist team members in resolving technical blockers and challenges, Participated in an AI-assisted project using LLMs to boost team productivity, while, exploring future trends in software development, Led the migration of a legacy monolithic system to microservices architecture, reducing, maintenance costs, Tech Stack: Java 8 , Spring, Spring boot, JPA, Fast API, Typescript, ReactJS,, ExpressJS, NestJS, Redux, npm, Oracle, MongoDB, Redis, Kafka, Pulsar, Hystrix, REST,, Maven, JUnit, Mockito, git, AWS, Azure Splunk, SignalFX, Senior Software Engineer / Team Lead 09/2017 - 08/2020, HyperAspect Sofia, Bulgaria, HyperAspect is a software development and consulting company, Led and mentored a team of software engineers, providing technical guidance and, career development support., Designed and implemented scalable, high-quality software solutions aligned with, business requirements., Oversaw code reviews to ensure best practices, code quality, and maintainability., Collaborated closely with product managers, stakeholders, and cross-functional teams, Coordinated task planning, estimation, and delivery across multiple projects and, deadlines, Designed and developed a scalable, high-performance full-stack web application for a, major U.S. e-tailer, optimized to handle high traffic loads, Tech Stack: Java 8 , Spring, Spring boot,  JPA, NodeJS, ReactJS, Redux, npm, Oracle,, MongoDB, Redis, Hystrix, REST, Maven, JUnit, Mockito, git, Perforce, AWS, Splunk,, SignalFX, Senior Software Engineer 08/2007 - 09/2017, Antipodes Sofia, Bulgaria, Antipodes is a Bulgarian software company specializing in BPM, ERP, and CRM, implementations. Their core product, Cubes—now called Prim.bg—is a web-based platform, that delivers powerful, ready-made features and the flexibility for business clients to, request custom integrations designed around their unique needs, Integration with third-party systems, including EasyPay and banking platforms, Designed and implemented a scalable billing engine, Developed an in-house ticketing system to streamline internal workflows, Tech Stack: Perl, ASP, Java, JavaScript, AngularJS, MySQL, PostgreSQL, REST, SOAP]]
 
 
 "RawSection[title=LANGUAGES, lines=[English Proficient]]"
+[ {
+  "language" : "English",
+  "proficiency" : "Proficient"
+} ]
 
 "RawSection[title=SKILLS, lines=[Java Spring Python JavaScript\n TypeScript Node.js REST SQL\n MongoDB Redis Apache Kafka\n Apache Pulsar Microservices AWS\n Azure git]]"
 
 "RawSection[title=EDUCATION, lines=[Bachelor's Degree in Informatics, Sofia University, 2006 - 2010, INTERESTS, Full-stack development and, microservices design, Cloud-native and scalable, systems architecture, www.enhancv.com​Powered by, •, •, •, •, •, •, •, •, •, •, •, •, •, •, •, •, •, •, ​ ​, ​, ​]]"
+[{"institution": "Sofia University", "degree": "Bachelor's Degree", "fieldOfStudy": "Informatics", "startDate": "2006-01-01", "endDate": "2010-01-01"}]
