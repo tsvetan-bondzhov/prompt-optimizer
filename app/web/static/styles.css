@@ -110,6 +110,27 @@ pre.prompt {
   font-size: 0.85rem;
 }
 pre.prompt.small { max-height: 140px; overflow-y: auto; font-size: 0.78rem; }
+
+.copy-wrap { position: relative; }
+.copy-wrap pre.prompt { margin: 0; }
+.copy-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  padding: 0;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  background: #1e293b;
+  color: #94a3b8;
+  cursor: pointer;
+}
+.copy-btn:hover { color: #e2e8f0; border-color: #64748b; }
+.copy-btn.copied { color: #86efac; border-color: #16803c; }
 pre.prompt.diff { color: #e2e8f0; }
 pre.prompt.diff span { display: inline-block; width: 100%; }
 pre.prompt.diff .diff-add { color: #86efac; background: rgba(34, 197, 94, 0.15); }

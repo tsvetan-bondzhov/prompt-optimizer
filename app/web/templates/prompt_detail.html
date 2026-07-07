@@ -34,7 +34,17 @@
 
 <section>
   <h2>Current prompt</h2>
-  <pre class="prompt">{{ prompt.current_prompt }}</pre>
+  <div class="copy-wrap">
+    <button type="button" class="copy-btn" id="copy-current-prompt"
+            title="Copy to clipboard" aria-label="Copy prompt to clipboard">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <rect x="5" y="5" width="9" height="10" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v8A1.5 1.5 0 0 0 3.5 13H5"
+              stroke="currentColor" stroke-width="1.5"/>
+      </svg>
+    </button>
+    <pre class="prompt" id="current-prompt-text">{{ prompt.current_prompt }}</pre>
+  </div>
 </section>
 
 {% if prompt.strengths or prompt.weaknesses or prompt.reasoning %}
@@ -92,4 +102,25 @@
   </table>
   {% else %}<p class="muted">No runs yet for this prompt.</p>{% endif %}
 </section>
+{% endblock %}
+{% block scripts %}
+<script>
+  (function () {
+    "use strict";
+    var btn = document.getElementById("copy-current-prompt");
+    var pre = document.getElementById("current-prompt-text");
+    if (!btn || !pre || !navigator.clipboard) return;
+    var icon = btn.innerHTML;
+    btn.addEventListener("click", function () {
+      navigator.clipboard.writeText(pre.textContent).then(function () {
+        btn.classList.add("copied");
+        btn.innerHTML = "&#10003;";
+        setTimeout(function () {
+          btn.classList.remove("copied");
+          btn.innerHTML = icon;
+        }, 1500);
+      });
+    });
+  })();
+</script>
 {% endblock %}
