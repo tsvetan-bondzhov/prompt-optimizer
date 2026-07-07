@@ -143,7 +143,11 @@ class OptimizerService:
             run_id = run.id
         else:
             await self._start_pending_run(run_id, config)
-        hook = self._progress.make_hook(run_id) if self._progress else None
+        hook = (
+            _nested_evaluation_hook(self._progress.make_hook(run_id))
+            if self._progress
+            else None
+        )
 
         try:
             # --- Baseline edge case (exactly one extra evaluation) -----------
@@ -424,6 +428,30 @@ class OptimizerService:
             await self._progress.publish(run_id, event)
         except Exception:  # progress must never break the loop
             logger.exception("Progress publish failed for run %s", run_id)
+
+
+def _nested_evaluation_hook(
+    hook: Callable[[dict[str, Any]], Any],
+) -> Callable[[dict[str, Any]], Any]:
+    """Downgrade terminal events from evaluations nested in the loop.
+
+    The evaluator ends every invocation with a ``completed`` event, which the
+    progress tracker treats as *run* completion — terminating the optimization
+    run's SSE stream after the first evaluation even though more iterations
+    follow. Rewrite it to a non-terminal ``step_completed``; the optimizer
+    publishes the real ``run_completed`` itself when the loop ends.
+    """
+
+    async def _hook(event: dict[str, Any]) -> None:
+        if event.get("event") in ("completed", "run_completed"):
+            event = {
+                **event,
+                "event": "step_completed",
+                "current_step": "evaluation completed",
+            }
+        await hook(event)
+
+    return _hook
 
 
 def summarizer_runner_selection(

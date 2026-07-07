@@ -17,11 +17,12 @@ from app.db.repositories import (
 from app.models import Prompt, RunConfig, TestCase
 from app.services.evaluator import EvaluatorService
 from app.services.optimizer import OptimizerService
+from app.services.progress import ProgressEventType, ProgressTracker
 from app.services.summarizer import SummarizerService
 from tests.fakes import FakeGrader, FakeExecutor, FakeOptimizer, FakeSummarizer
 
 
-async def make_env(db, scores, *, avg_score=None):
+async def make_env(db, scores, *, avg_score=None, progress=None):
     """Build an optimizer wired to fakes, plus a persisted prompt + test case.
 
     ``scores`` scripts the single evaluation step: with one test case and
@@ -58,6 +59,7 @@ async def make_env(db, scores, *, avg_score=None):
         TestCaseRepository(db),
         version_repository=PromptVersionRepository(db),
         optimizer_resolver=FakeOptimizer,
+        progress=progress,
     )
     return optimizer, prompt
 
@@ -165,6 +167,23 @@ async def test_rejected_iterations_save_no_version(db):
     optimizer, prompt = await make_env(db, scores=(8, 8, 8))
     await optimizer.optimize(prompt.id, RunConfig(target_score=10, max_iterations=2))
     assert await PromptVersionRepository(db).list_by_prompt(prompt.id) == []
+
+
+async def test_nested_evaluation_completion_does_not_terminate_run(db):
+    # Baseline 5, then 6 / 7 / 8 — three accepted iterations before the target.
+    # Each nested evaluation emits a raw "completed" event; none of them may
+    # surface as run_completed on the optimization run's progress channel.
+    tracker = ProgressTracker()
+    optimizer, prompt = await make_env(db, scores=(5, 6, 7, 8), progress=tracker)
+    await optimizer.optimize(prompt.id, RunConfig(target_score=8, max_iterations=5))
+
+    run = (await OptimizationRunRepository(db).list())[0]
+    events = tracker.snapshot(run["id"]).events
+    completed = [e for e in events if e.type is ProgressEventType.RUN_COMPLETED]
+    assert len(completed) == 1
+    assert events[-1].type is ProgressEventType.RUN_COMPLETED
+    iterations = [e for e in events if e.type is ProgressEventType.ITERATION_DONE]
+    assert len(iterations) == 3
 
 
 async def test_missing_prompt_raises(db):
