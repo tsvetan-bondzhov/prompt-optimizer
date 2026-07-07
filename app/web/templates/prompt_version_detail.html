@@ -5,7 +5,7 @@
   <h1>{{ prompt.name if prompt else 'Prompt' }} — version {{ version.version_number }}</h1>
   <div class="actions">
     {% if prompt %}<a class="btn" href="/prompts/{{ version.prompt_id }}">Back to prompt</a>{% endif %}
-    {% if version.run_id %}<a class="btn" href="/optimizations/{{ version.run_id }}/steps">Optimization run</a>{% endif %}
+    {% if version.run_id %}<a class="btn" href="/optimizations/{{ version.run_id }}/iterations">Optimization run</a>{% endif %}
   </div>
 </div>
 

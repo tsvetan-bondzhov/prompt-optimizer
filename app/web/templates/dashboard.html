@@ -41,7 +41,7 @@
         <td>{{ prompt_names.get(r.prompt_id, r.prompt_id[:8]) }}</td>
         <td><span class="status status-{{ r.status }}">{{ r.status }}</span></td>
         <td class="muted">{{ r.created_at }}</td>
-        <td><a class="btn small" href="/optimizations/{{ r.id }}/steps">Steps</a></td>
+        <td><a class="btn small" href="/optimizations/{{ r.id }}/iterations">Iterations</a></td>
       </tr>
       {% endfor %}
     </tbody>

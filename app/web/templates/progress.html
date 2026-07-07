@@ -5,7 +5,7 @@
   <h1>{{ 'Optimization' if kind == 'optimization' else 'Evaluation' }} run <code>{{ run_id[:8] }}</code></h1>
   <div class="actions">
     {% if kind == 'optimization' %}
-    <a class="btn" href="/optimizations/{{ run_id }}/steps">View steps</a>
+    <a class="btn" href="/optimizations/{{ run_id }}/iterations">View iterations</a>
     <a class="btn" href="/prompts/{{ run.prompt_id }}">Back to prompt</a>
     {% else %}
     <a class="btn" href="/evaluations/{{ run_id }}/reports">View reports</a>

@@ -63,7 +63,12 @@ double quotes, ~88 col, Google-style docstrings with `:param:`).
   individually, the test case score is the mean over entries.
 - **Prompt version** — snapshot of a superseded prompt (text + avg score),
   saved by the optimizer before an accepted iteration replaces
-  `current_prompt`; browsable from the prompt page and the run's steps page.
+  `current_prompt`; browsable from the prompt page and the run's
+  iterations page.
+- **Optimization iteration** — the UI name for an `OptimizationStep`
+  document (one loop iteration); "steps" in the UI would collide with
+  evaluation steps, so pages/URLs say "iterations" (legacy `/steps` web
+  URLs redirect; the JSON API keeps `/api/optimizations/{id}/steps`).
 
 ## Conventions / gotchas
 

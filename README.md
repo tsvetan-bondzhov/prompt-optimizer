@@ -95,7 +95,7 @@ The suite runs entirely offline (mongomock + deterministic fakes; no LLM calls).
    score, summary, links to all evaluation reports) whether accepted or
    rejected. The prompt only advances on a strictly better score; each
    accepted iteration first snapshots the outgoing prompt version, and the
-   run's steps page lists the versions it saved.
+   run's iterations page lists the versions it saved.
 5. **Progress** (`/runs/{run_id}`) — live SSE progress; reloading the page
    rebuilds the report from persisted progress.
 

@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Step {{ step.iteration_index }} — Prompt Optimizer{% endblock %}
+{% block title %}Iteration {{ step.iteration_index }} — Prompt Optimizer{% endblock %}
 {% block content %}
 <div class="section-head">
   <h1>Iteration {{ step.iteration_index }}
     {% if step.accepted %}<span class="status status-completed">accepted</span>
     {% else %}<span class="status status-failed">rejected</span>{% endif %}
   </h1>
-  <a class="btn" href="/optimizations/{{ step.run_id }}/steps">All steps</a>
+  <a class="btn" href="/optimizations/{{ step.run_id }}/iterations">All iterations</a>
 </div>
 
 <div class="cards">

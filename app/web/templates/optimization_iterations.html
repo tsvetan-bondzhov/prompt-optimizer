@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}Optimization Steps — Prompt Optimizer{% endblock %}
+{% block title %}Optimization Iterations — Prompt Optimizer{% endblock %}
 {% block content %}
 <div class="section-head">
-  <h1>Optimization steps <code>{{ run_id[:8] }}</code></h1>
+  <h1>Optimization iterations <code>{{ run_id[:8] }}</code></h1>
   <div class="actions">
     <a class="btn" href="/runs/{{ run_id }}">Run progress</a>
     <a class="btn" href="/prompts/{{ run.prompt_id }}">Prompt</a>
@@ -33,13 +33,13 @@
       </td>
       <td>{{ (s.test_case_ids or [])|length }}</td>
       <td class="truncate muted">{{ (s.summarized_reasoning or '')[:120] }}</td>
-      <td><a class="btn small" href="/steps/{{ s.id }}">Detail</a></td>
+      <td><a class="btn small" href="/iterations/{{ s.id }}">Detail</a></td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
 {% else %}
-<p class="muted">No steps yet — the run may still be in progress.</p>
+<p class="muted">No iterations yet — the run may still be in progress.</p>
 {% endif %}
 
 <section>

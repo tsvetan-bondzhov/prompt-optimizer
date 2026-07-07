@@ -95,7 +95,7 @@
         <td><a href="/runs/{{ r.id }}"><code>{{ r.id[:8] }}</code></a></td>
         <td><span class="status status-{{ r.status }}">{{ r.status }}</span></td>
         <td class="muted">{{ r.created_at }}</td>
-        <td><a class="btn small" href="/optimizations/{{ r.id }}/steps">Steps</a></td>
+        <td><a class="btn small" href="/optimizations/{{ r.id }}/iterations">Iterations</a></td>
       </tr>
       {% endfor %}
     </tbody>

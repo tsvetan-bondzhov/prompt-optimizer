@@ -725,8 +725,8 @@ async def evaluation_report_detail_page(
     )
 
 
-@router.get("/optimizations/{run_id}/steps", response_class=HTMLResponse)
-async def optimization_steps_page(
+@router.get("/optimizations/{run_id}/iterations", response_class=HTMLResponse)
+async def optimization_iterations_page(
     request: Request,
     run_id: str,
     opt_runs: OptimizationRunRepository = Depends(get_optimization_run_repository),
@@ -742,7 +742,7 @@ async def optimization_steps_page(
     names = await _test_case_names(list(all_tc_ids), test_cases)
     return _render(
         request,
-        "optimization_steps.html",
+        "optimization_iterations.html",
         run=run,
         run_id=run_id,
         steps=step_docs,
@@ -751,8 +751,18 @@ async def optimization_steps_page(
     )
 
 
-@router.get("/steps/{step_id}", response_class=HTMLResponse)
-async def optimization_step_detail_page(
+@router.get("/optimizations/{run_id}/steps", include_in_schema=False)
+async def optimization_steps_redirect(run_id: str) -> RedirectResponse:
+    """Legacy URL — the page moved when 'steps' became 'iterations'."""
+
+    return RedirectResponse(
+        f"/optimizations/{run_id}/iterations",
+        status_code=status.HTTP_301_MOVED_PERMANENTLY,
+    )
+
+
+@router.get("/iterations/{step_id}", response_class=HTMLResponse)
+async def optimization_iteration_detail_page(
     request: Request,
     step_id: str,
     steps: OptimizationStepRepository = Depends(get_step_repository),
@@ -762,7 +772,29 @@ async def optimization_step_detail_page(
     if step is None:
         raise HTTPException(status_code=404, detail="Step not found.")
     names = await _test_case_names(step.get("test_case_ids", []), test_cases)
-    diff_lines = list(
+    diff_lines = _diff_lines(step)
+    return _render(
+        request,
+        "optimization_iteration_detail.html",
+        step=step,
+        test_case_names=names,
+        diff_lines=diff_lines,
+    )
+
+
+@router.get("/steps/{step_id}", include_in_schema=False)
+async def optimization_step_detail_redirect(step_id: str) -> RedirectResponse:
+    """Legacy URL — the page moved when 'steps' became 'iterations'."""
+
+    return RedirectResponse(
+        f"/iterations/{step_id}", status_code=status.HTTP_301_MOVED_PERMANENTLY
+    )
+
+
+def _diff_lines(step: dict[str, Any]) -> list[str]:
+    """Unified diff between an iteration's previous and proposed prompt."""
+
+    return list(
         difflib.unified_diff(
             (step.get("previous_prompt") or "").splitlines(),
             (step.get("proposed_prompt") or "").splitlines(),
@@ -770,11 +802,4 @@ async def optimization_step_detail_page(
             tofile="proposed prompt",
             lineterm="",
         )
-    )
-    return _render(
-        request,
-        "optimization_step_detail.html",
-        step=step,
-        test_case_names=names,
-        diff_lines=diff_lines,
     )
