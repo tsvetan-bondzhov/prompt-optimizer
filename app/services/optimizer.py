@@ -155,6 +155,9 @@ class OptimizerService:
                 await self._establish_baseline(prompt, test_cases, config, hook)
 
             # --- Improvement loop --------------------------------------------
+            # ``prompt`` is mutated in place by _run_iteration/_apply_summary
+            # when a proposal is accepted, so this condition and the
+            # iteration_done event below always see the freshest avg_score.
             iteration = 0
             while (
                 prompt.avg_score is not None
@@ -307,7 +310,11 @@ class OptimizerService:
         iteration: int,
         hook: Optional[Callable[[dict[str, Any]], Any]],
     ) -> None:
-        """Run a single improve / evaluate / summarize / accept iteration."""
+        """Run a single improve / evaluate / summarize / accept iteration.
+
+        On acceptance ``prompt`` is updated **in place** (text, score, summary)
+        and persisted — the caller's loop condition reads the same object.
+        """
 
         previous_prompt = prompt.current_prompt
         previous_avg = prompt.avg_score

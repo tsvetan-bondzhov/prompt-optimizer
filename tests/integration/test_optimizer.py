@@ -187,7 +187,9 @@ async def test_nested_evaluation_completion_does_not_terminate_run(db):
     # The iterations card consumes these fields from the serialized frame.
     assert [e.executed for e in iterations] == [1, 2, 3]
     assert all(e.total == 5 for e in iterations)
-    assert all(getattr(e, "avg_score", None) is not None for e in iterations)
+    # Each event carries the freshly accepted score (the prompt is mutated in
+    # place before the emit), never a stale pre-iteration value.
+    assert [getattr(e, "avg_score", None) for e in iterations] == [6.0, 7.0, 8.0]
     assert '"avg_score":' in iterations[-1].model_dump_json()
 
 
