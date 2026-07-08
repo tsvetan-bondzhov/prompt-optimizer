@@ -5,8 +5,8 @@ registry. It is idempotent.
 
 This module only registers framework-provided defaults (currently the mean
 aggregator). User-supplied / reference implementations — concrete
-``PromptExecutor``, ``EvaluationStep`` + ``prepare_evaluation()``,
-``PromptImprover``, ``Summarizer`` and ``LLMRunner`` — live under
+``PromptExecutor``, ``Grader``,
+``PromptOptimizer``, ``Summarizer`` and ``LLMRunner`` — live under
 ``app/implementations`` and ``app/llm`` (Tasks 06/07/10). When those exist they
 register themselves here (or via import side effects in
 ``app/implementations/__init__.py``).
@@ -34,7 +34,7 @@ def register_builtins() -> None:
     if _done:
         return
 
-    # Default aggregation strategy: mean of per-step scores.
+    # Default aggregation strategy: mean of per-grader scores.
     register("aggregator", "default", lambda: mean_aggregator)
 
     # LLM runners (Task 06): the Claude Code headless runner is the default,
@@ -42,14 +42,16 @@ def register_builtins() -> None:
     # lazily to keep import-time side effects out of the core package.
     from app.llm.claude_code import ClaudeCodeRunner
     from app.llm.fake import FakeLLMRunner
+    from app.llm.ollama import OllamaLLMRunner
 
     register("llm_runner", "claude_code", ClaudeCodeRunner)
     register("llm_runner", "fake", FakeLLMRunner)
+    register("llm_runner", "ollama", OllamaLLMRunner)
 
     # Reference implementations (Task 07): importing the package fires the
     # module-level registrations — the reference PromptExecutor under
-    # ("executor", "default") and prepare_evaluation() under
-    # ("evaluation_prepare", "default"). Imported lazily here to keep
+    # ("executor", "default") and the reference graders under the "grader"
+    # category. Imported lazily here to keep
     # import-time side effects out of the core package.
     import app.implementations  # noqa: F401
 
@@ -60,10 +62,10 @@ def register_builtins() -> None:
     # effects out of the core package.
     import app.implementations.summarizer  # noqa: F401
 
-    # Reference improver (Task 09): importing the module fires its module-level
-    # registrations — the LLM-backed improver under ("improver", "claude_code")
-    # (the default ACTIVE_IMPROVER) and a generic ("improver", "default") alias.
+    # Reference optimizer (Task 09): importing the module fires its module-level
+    # registrations — the LLM-backed optimizer under ("optimizer", "claude_code")
+    # (the default ACTIVE_OPTIMIZER) and a generic ("optimizer", "default") alias.
     # Imported lazily to keep import-time side effects out of the core package.
-    import app.implementations.improver  # noqa: F401
+    import app.implementations.optimizer  # noqa: F401
 
     _done = True

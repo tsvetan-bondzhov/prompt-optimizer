@@ -1,5 +1,43 @@
 {% extends "base.html" %}
 {% block title %}{{ 'Edit' if test_case else 'New' }} Test Case — Prompt Optimizer{% endblock %}
+
+{% macro info_button(kind, info) %}
+{% if info.description or info.criteria_info or info.criteria_sample %}
+<button type="button" class="info-btn" title="About {{ info.display_name }}"
+        onclick="document.getElementById('info-{{ kind }}-{{ info.name }}').showModal()">&#9432;</button>
+{% endif %}
+{% endmacro %}
+
+{% macro info_dialog(kind, info) %}
+{% if info.description or info.criteria_info or info.criteria_sample %}
+<dialog id="info-{{ kind }}-{{ info.name }}" class="info-dialog">
+  <h3>{{ info.display_name }} <code class="muted">{{ info.name }}</code></h3>
+  {% if info.description %}<p>{{ info.description }}</p>{% endif %}
+  {% if info.criteria_info %}
+  <h4>Evaluation criteria keys</h4>
+  <table>
+    <thead><tr><th>Key</th><th>Description</th></tr></thead>
+    <tbody>
+      {% for c in info.criteria_info %}
+      <tr><td><code>{{ c.key }}</code></td><td>{{ c.description }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+  {% if info.criteria_sample is not none %}
+  <h4>Sample criteria snippet</h4>
+  <pre class="prompt small" id="sample-{{ kind }}-{{ info.name }}">{{ info.criteria_sample|tojson_pretty }}</pre>
+  <button type="button" class="btn small"
+          onclick="copySample('sample-{{ kind }}-{{ info.name }}', this)">Copy snippet</button>
+  {% endif %}
+  <div class="actions">
+    <button type="button" class="btn"
+            onclick="document.getElementById('info-{{ kind }}-{{ info.name }}').close()">Close</button>
+  </div>
+</dialog>
+{% endif %}
+{% endmacro %}
+
 {% block content %}
 <h1>{{ 'Edit test case' if test_case else 'New test case' }}</h1>
 
@@ -7,15 +45,89 @@
   <label>Name
     <input type="text" name="name" required value="{{ test_case.name if test_case else '' }}">
   </label>
-  <label>Data (JSON object — inputs handed to the executor)
-    <textarea name="data" rows="8">{{ test_case.data|tojson_pretty if test_case else '{}' }}</textarea>
+  <label>Data (JSON array of objects — each entry is executed and graded individually)
+    <textarea name="data" rows="8">{{ test_case.data|tojson_pretty if test_case else '[]' }}</textarea>
   </label>
-  <label>Evaluation criteria (JSON object — consumed by your evaluation steps)
+  <label>Evaluation criteria per data entry (JSON array of objects, aligned by index with the data entries)
+    <textarea name="evaluation_criteria_per_entry" rows="8">{{ test_case.evaluation_criteria_per_entry|tojson_pretty if test_case and test_case.evaluation_criteria_per_entry is defined else '[]' }}</textarea>
+  </label>
+  <label>Evaluation criteria for dataset (JSON object — per-key fallback: a key set here applies to every entry that does not define it itself)
     <textarea name="evaluation_criteria" rows="8">{{ test_case.evaluation_criteria|tojson_pretty if test_case else '{}' }}</textarea>
   </label>
+  <fieldset>
+    <legend>Executor (runs the prompt for each data entry)</legend>
+    {% set current_executor = test_case.executor_name if test_case and test_case.executor_name else 'default' %}
+    {% for e in executor_infos %}
+    <label class="check">
+      <input type="radio" name="executor_name" value="{{ e.name }}"
+             {% if e.name == current_executor %}checked{% endif %}>
+      {{ e.display_name }} <code class="muted">{{ e.name }}</code>
+      {{ info_button('executor', e) }}
+    </label>
+    {% endfor %}
+    {% for e in executor_infos %}{{ info_dialog('executor', e) }}{% endfor %}
+  </fieldset>
+  <div class="grid-3">
+    <div>
+      <label>LLM runner for the executor
+        <select name="executor_llm_runner">
+          {% set current_runner = test_case.executor_llm_runner if test_case and test_case.executor_llm_runner else '' %}
+          {% for r in available_llm_runners %}
+          <option value="{{ r }}" {% if r == current_runner %}selected{% endif %}>{{ r }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <div id="executor-runner-options" class="runner-options"></div>
+    </div>
+  </div>
+  <fieldset>
+    <legend>Graders (executed for every data entry of this test case)</legend>
+    {% if grader_infos %}
+      {% set selected = test_case.grader_names if test_case and test_case.grader_names else [] %}
+      {% for g in grader_infos %}
+      <label class="check">
+        <input type="checkbox" name="grader_names" value="{{ g.name }}"
+               {% if g.name in selected %}checked{% endif %}>
+        {{ g.display_name }} <code class="muted">{{ g.name }}</code>
+        {{ info_button('grader', g) }}
+      </label>
+      {% endfor %}
+      {% for g in grader_infos %}{{ info_dialog('grader', g) }}{% endfor %}
+    {% else %}
+      <p class="muted">No graders registered.</p>
+    {% endif %}
+  </fieldset>
   <div class="actions">
     <button class="btn primary" type="submit">Save</button>
     <a class="btn" href="/test-cases">Cancel</a>
   </div>
 </form>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/runner_options.js?v={{ static_v }}"></script>
+<script>
+  window.LLM_RUNNER_OPTIONS = {{ llm_runner_options_map|tojson }};
+  initRunnerOptions(
+    "executor_llm_runner",
+    "executor-runner-options",
+    {{ (test_case.executor_llm_runner_options if test_case and test_case.executor_llm_runner_options is defined and test_case.executor_llm_runner_options else {})|tojson }},
+    {{ (test_case.executor_llm_runner if test_case and test_case.executor_llm_runner else '')|tojson }}
+  );
+</script>
+<script>
+  function copySample(preId, button) {
+    const text = document.getElementById(preId).textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      const original = button.textContent;
+      button.textContent = "Copied!";
+      setTimeout(() => { button.textContent = original; }, 1500);
+    });
+  }
+  // An info button lives inside the option <label>; keep its clicks from
+  // toggling the checkbox/radio.
+  document.querySelectorAll(".info-btn").forEach((btn) => {
+    btn.addEventListener("click", (event) => event.preventDefault());
+  });
+</script>
 {% endblock %}

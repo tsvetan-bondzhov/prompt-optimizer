@@ -1,15 +1,15 @@
-"""Reference :class:`EvaluationStep` implementations (Task 07).
+"""Reference :class:`Grader` implementations (Task 07).
 
 These are **copy-paste templates** for the user-supplied scoring logic. Per the
-design decision, evaluation steps ship **no built-in LLM call** — each step
+design decision, graders ship **no built-in LLM call** — each step
 derives a structured :class:`PromptEvaluation` from ``result.text`` and
 ``test_case.evaluation_criteria`` using deterministic/heuristic logic.
 
 Two reference steps are provided:
 
-* :class:`KeywordCoverageStep` — scores how many expected keywords (read from
+* :class:`KeywordCoverageGrader` — scores how many expected keywords (read from
   ``test_case.evaluation_criteria``) appear in the output.
-* :class:`ResponseQualityStep` — a content-agnostic heuristic on the shape of
+* :class:`ResponseQualityGrader` — a content-agnostic heuristic on the shape of
   the output (non-empty, length within an optional band).
 
 Replace the marked ``# >>> USER`` regions with your own scoring (an LLM-judge
@@ -17,21 +17,23 @@ call, regex/JSON assertions, embedding similarity, etc.). Whatever you do, the
 step MUST return a valid :class:`PromptEvaluation`:
 
 * ``score``: an integer in ``[1, 10]``
-* ``strengths`` / ``weaknesses``: 1–3 non-empty items each
+* ``strengths`` / ``weaknesses``: up to 3 non-empty items each (empty is
+  fine — only report entries that carry information)
 * ``reasoning``: a non-empty string
-* ``step_name``: set to the step's ``name`` for traceability
+* ``grader_name``: set to the step's ``name`` for traceability
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from app.core.interfaces import EvaluationStep
+from app.core.interfaces import Grader
+from app.core.registry import register
 from app.models import PromptEvaluation, PromptResult, TestCase
 
 __all__ = [
-    "KeywordCoverageStep",
-    "ResponseQualityStep",
+    "KeywordCoverageGrader",
+    "ResponseQualityGrader",
     "clamp_score",
     "trim",
 ]
@@ -50,7 +52,7 @@ def trim(items: list[str], limit: int = 3) -> list[str]:
     return cleaned[:limit]
 
 
-class KeywordCoverageStep(EvaluationStep):
+class KeywordCoverageGrader(Grader):
     """Score the fraction of expected keywords present in the output.
 
     Expected keywords are read from ``test_case.evaluation_criteria`` under the
@@ -60,33 +62,51 @@ class KeywordCoverageStep(EvaluationStep):
     """
 
     name = "keyword_coverage"
+    display_name = "Keyword coverage"
+    description = (
+        "Checks which expected keywords appear in the output and scores the "
+        "coverage ratio linearly onto 1-10. Without configured keywords the "
+        "grader returns a neutral 5."
+    )
+    criteria_info = [
+        {
+            "key": "keywords",
+            "description": "List of keywords expected to appear in the output "
+            "(case-insensitive). Legacy alias: 'expected_keywords'.",
+        },
+    ]
+    criteria_sample = {"keywords": ["refund", "14 days", "support@example.com"]}
 
-    def _expected_keywords(self, test_case: TestCase) -> list[str]:
-        criteria: dict[str, Any] = test_case.evaluation_criteria or {}
+    def _expected_keywords(
+        self, test_case: TestCase, entry_index: int
+    ) -> list[str]:
+        criteria: dict[str, Any] = self.criteria_for(test_case, entry_index)
         raw = criteria.get("keywords", criteria.get("expected_keywords", []))
         if isinstance(raw, str):
             raw = [raw]
         return [str(k).strip() for k in raw if str(k).strip()]
 
-    async def evaluate(
-        self, result: PromptResult, test_case: TestCase
+    async def grade(
+        self,
+        result: PromptResult,
+        test_case: TestCase,
+        entry_index: int = 0,
     ) -> PromptEvaluation:
         """Derive a keyword-coverage evaluation from ``result`` and ``test_case``."""
 
         # >>> USER: this is the heuristic you would replace with your own scoring.
-        keywords = self._expected_keywords(test_case)
+        keywords = self._expected_keywords(test_case, entry_index)
         text_lower = result.text.lower()
 
         if not keywords:
             return PromptEvaluation(
-                strengths=["Output produced for the test case"],
                 weaknesses=["No expected keywords configured to verify against"],
                 reasoning=(
                     "No keywords found in test_case.evaluation_criteria, so this "
                     "step cannot measure coverage; returning a neutral score."
                 ),
                 score=5,
-                step_name=self.name,
+                grader_name=self.name,
             )
 
         present = [k for k in keywords if k.lower() in text_lower]
@@ -94,12 +114,8 @@ class KeywordCoverageStep(EvaluationStep):
         coverage = len(present) / len(keywords)
         score = clamp_score(1 + coverage * 9)  # map [0, 1] -> [1, 10]
 
-        strengths = trim(
-            [f"Contains expected keyword: {k!r}" for k in present]
-        ) or ["Output was generated and inspected for keyword coverage"]
-        weaknesses = trim(
-            [f"Missing expected keyword: {k!r}" for k in missing]
-        ) or ["All expected keywords were present"]
+        strengths = trim([f"Contains expected keyword: {k!r}" for k in present])
+        weaknesses = trim([f"Missing expected keyword: {k!r}" for k in missing])
 
         reasoning = (
             f"Matched {len(present)}/{len(keywords)} expected keywords "
@@ -111,11 +127,11 @@ class KeywordCoverageStep(EvaluationStep):
             weaknesses=weaknesses,
             reasoning=reasoning,
             score=score,
-            step_name=self.name,
+            grader_name=self.name,
         )
 
 
-class ResponseQualityStep(EvaluationStep):
+class ResponseQualityGrader(Grader):
     """Content-agnostic heuristic on the shape of the output.
 
     Rewards a non-empty response and (optionally) one whose length falls within
@@ -126,14 +142,34 @@ class ResponseQualityStep(EvaluationStep):
     """
 
     name = "response_quality"
+    display_name = "Response quality (shape)"
+    description = (
+        "Content-agnostic heuristic on the shape of the output: rewards a "
+        "non-empty response whose length falls within the configured "
+        "min/max character bounds."
+    )
+    criteria_info = [
+        {
+            "key": "min_length",
+            "description": "Minimum output length in characters (default 1).",
+        },
+        {
+            "key": "max_length",
+            "description": "Maximum output length in characters (optional).",
+        },
+    ]
+    criteria_sample = {"min_length": 50, "max_length": 800}
 
-    async def evaluate(
-        self, result: PromptResult, test_case: TestCase
+    async def grade(
+        self,
+        result: PromptResult,
+        test_case: TestCase,
+        entry_index: int = 0,
     ) -> PromptEvaluation:
         """Derive a shape/quality evaluation from ``result`` and ``test_case``."""
 
         # >>> USER: replace this block with your own quality signals.
-        criteria: dict[str, Any] = test_case.evaluation_criteria or {}
+        criteria: dict[str, Any] = self.criteria_for(test_case, entry_index)
         text = result.text.strip()
         length = len(text)
         min_length = int(criteria.get("min_length", 1))
@@ -169,9 +205,9 @@ class ResponseQualityStep(EvaluationStep):
             strengths.append(f"Within the maximum length of {max_length} characters")
             score += 1.0
 
-        # Guarantee the 1–3 item / non-empty constraints regardless of branch.
-        strengths = trim(strengths) or ["Output was generated and inspected"]
-        weaknesses = trim(weaknesses) or ["No structural issues detected"]
+        # Cap at 3 items; empty lists are fine.
+        strengths = trim(strengths)
+        weaknesses = trim(weaknesses)
 
         reasoning = (
             f"Heuristic shape check: length={length} chars, "
@@ -184,5 +220,11 @@ class ResponseQualityStep(EvaluationStep):
             weaknesses=weaknesses,
             reasoning=reasoning,
             score=clamp_score(score),
-            step_name=self.name,
+            grader_name=self.name,
         )
+
+
+# Register the reference graders by name; test cases select graders through
+# ``TestCase.grader_names``.
+register("grader", KeywordCoverageGrader.name, KeywordCoverageGrader)
+register("grader", ResponseQualityGrader.name, ResponseQualityGrader)

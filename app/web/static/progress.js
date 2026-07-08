@@ -16,11 +16,20 @@
   var countEl = document.getElementById("progress-count");
   var stepEl = document.getElementById("current-step");
   var logEl = document.getElementById("event-log");
+  var iterFillEl = document.getElementById("iteration-fill");
+  var iterCountEl = document.getElementById("iteration-count");
+  var iterScoreEl = document.getElementById("iteration-score");
+
+  var TERMINAL = { completed: true, failed: true, cancelled: true };
 
   function setStatus(status) {
     if (!status || !statusEl) return;
     statusEl.textContent = status;
     statusEl.className = "status status-" + status;
+    var repeatEl = document.getElementById("repeat-evaluation");
+    if (repeatEl && status === "completed") repeatEl.hidden = false;
+    var stopEl = document.getElementById("stop-run");
+    if (stopEl) stopEl.hidden = !!TERMINAL[status];
   }
 
   function setProgress(executed, total) {
@@ -35,6 +44,30 @@
 
   function setCurrentStep(text) {
     if (text && stepEl) stepEl.textContent = text;
+  }
+
+  /* Iterations card (optimization runs): fed by "iteration_done" events,
+   * which carry executed / total as iteration counts plus the current best
+   * avg_score. Replayed snapshot events rebuild it on page reload. */
+  function setIterations(ev) {
+    if (ev.type !== "iteration_done") {
+      if (ev.type === "run_completed" && ev.avg_score != null && iterScoreEl) {
+        iterScoreEl.textContent = Number(ev.avg_score).toFixed(2);
+      }
+      return;
+    }
+    var executed = ev.executed || 0;
+    var total = ev.total || 0;
+    if (iterCountEl) {
+      iterCountEl.textContent = executed + " / " + (total || "?") + " iterations";
+    }
+    if (iterFillEl && total > 0) {
+      iterFillEl.style.width =
+        Math.min(100, Math.round((executed / total) * 100)) + "%";
+    }
+    if (iterScoreEl && ev.avg_score != null) {
+      iterScoreEl.textContent = Number(ev.avg_score).toFixed(2);
+    }
   }
 
   function addLogRow(ev) {
@@ -54,7 +87,11 @@
       var td = document.createElement("td");
       td.textContent = text;
       if (i === 1) {
-        var cls = { run_completed: "status-completed", error: "status-failed" }[ev.type];
+        var cls = {
+          run_completed: "status-completed",
+          run_cancelled: "status-cancelled",
+          error: "status-failed",
+        }[ev.type];
         if (cls) td.innerHTML = '<span class="status ' + cls + '">' + ev.type + "</span>";
       }
       tr.appendChild(td);
@@ -65,7 +102,9 @@
   function applyEvent(ev) {
     setProgress(ev.executed, ev.total);
     setCurrentStep(ev.current_state);
+    setIterations(ev);
     if (ev.type === "run_completed") setStatus("completed");
+    else if (ev.type === "run_cancelled") setStatus("cancelled");
     else if (ev.type === "error") setStatus("failed");
     else setStatus("running");
     addLogRow(ev);
@@ -78,20 +117,30 @@
     setStatus(snap.status);
     setProgress(snap.executed, snap.total);
     setCurrentStep(snap.current_state || snap.current_step);
-    (snap.events || []).forEach(addLogRow);
-    if (snap.status === "completed" || snap.status === "failed") source.close();
+    (snap.events || []).forEach(function (ev) {
+      addLogRow(ev);
+      setIterations(ev);
+    });
+    if (TERMINAL[snap.status]) source.close();
   });
 
-  ["step_started", "step_completed", "iteration_done", "run_completed", "error"].forEach(
-    function (type) {
-      source.addEventListener(type, function (e) {
-        var ev = JSON.parse(e.data);
-        ev.type = ev.type || type;
-        applyEvent(ev);
-        if (type === "run_completed" || type === "error") source.close();
-      });
-    }
-  );
+  [
+    "step_started",
+    "step_completed",
+    "iteration_done",
+    "run_completed",
+    "run_cancelled",
+    "error",
+  ].forEach(function (type) {
+    source.addEventListener(type, function (e) {
+      var ev = JSON.parse(e.data);
+      ev.type = ev.type || type;
+      applyEvent(ev);
+      if (type === "run_completed" || type === "run_cancelled" || type === "error") {
+        source.close();
+      }
+    });
+  });
 
   source.onerror = function () {
     // The server closes the stream on terminal runs; nothing to do.

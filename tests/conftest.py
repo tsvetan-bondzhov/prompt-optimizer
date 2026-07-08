@@ -2,7 +2,7 @@
 
 Every test gets a fresh mongomock database. API tests get a ``TestClient``
 whose registry resolves to deterministic fakes (no LLM / network access): the
-fake executor, a scripted evaluation step, the fake improver, and the fake
+fake executor, a scripted evaluation step, the fake optimizer, and the fake
 summarizer are (re-)registered under the *active* configuration names before
 each test.
 """
@@ -19,9 +19,9 @@ from app.core.bootstrap import register_builtins
 from app.core.registry import register
 from app.llm.fake import FakeLLMRunner
 from tests.fakes import (
-    FakeEvaluationStep,
+    FakeGrader,
     FakeExecutor,
-    FakeImprover,
+    FakeOptimizer,
     FakeSummarizer,
 )
 
@@ -44,12 +44,8 @@ def registered_fakes():
 
     register_builtins()
     register("executor", "default", FakeExecutor)
-    register(
-        "evaluation_prepare",
-        "default",
-        lambda: [FakeEvaluationStep(scores=(8,))],
-    )
-    register("improver", "claude_code", FakeImprover)
+    register("grader", "fake", lambda: FakeGrader(scores=(8,)))
+    register("optimizer", "claude_code", FakeOptimizer)
     register("summarizer", "default", FakeSummarizer)
     register("llm_runner", "claude_code", FakeLLMRunner)
     yield

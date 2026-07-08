@@ -5,26 +5,27 @@
 
 <section>
   <div class="section-head">
-    <h2>Optimization States</h2>
-    <a class="btn" href="/states/new">＋ New state</a>
+    <h2>Prompts</h2>
+    <a class="btn" href="/prompts/new">＋ New prompt</a>
   </div>
-  {% if states %}
+  {% if prompts %}
   <table>
-    <thead><tr><th>Goal</th><th>Avg score</th><th>Test cases</th><th>Updated</th><th></th></tr></thead>
+    <thead><tr><th>Name</th><th>Goal</th><th>Avg score</th><th>Test cases</th><th>Updated</th><th></th></tr></thead>
     <tbody>
-      {% for s in states %}
+      {% for s in prompts %}
       <tr>
-        <td><a href="/states/{{ s.id }}">{{ s.goal }}</a></td>
+        <td><a href="/prompts/{{ s.id }}">{{ s.name }}</a></td>
+        <td class="truncate">{{ s.goal }}</td>
         <td>{% if s.avg_score is not none %}<span class="score">{{ '%.2f'|format(s.avg_score) }}</span>{% else %}<span class="muted">no baseline</span>{% endif %}</td>
         <td>{{ (s.test_case_ids or [])|length }}</td>
         <td class="muted">{{ s.updated_at }}</td>
-        <td><a class="btn small" href="/optimize?state_id={{ s.id }}">Optimize</a></td>
+        <td><a class="btn small" href="/optimize?prompt_id={{ s.id }}">Optimize</a></td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
   {% else %}
-  <p class="muted">No states yet. <a href="/states/new">Create one</a> to get started.</p>
+  <p class="muted">No prompts yet. <a href="/prompts/new">Create one</a> to get started.</p>
   {% endif %}
 </section>
 
@@ -32,15 +33,15 @@
   <h2>Recent Optimization Runs</h2>
   {% if optimization_runs %}
   <table>
-    <thead><tr><th>Run</th><th>State</th><th>Status</th><th>Created</th><th></th></tr></thead>
+    <thead><tr><th>Run</th><th>Prompt</th><th>Status</th><th>Created</th><th></th></tr></thead>
     <tbody>
       {% for r in optimization_runs %}
       <tr>
         <td><a href="/runs/{{ r.id }}"><code>{{ r.id[:8] }}</code></a></td>
-        <td>{{ state_names.get(r.state_id, r.state_id[:8]) }}</td>
+        <td>{{ prompt_names.get(r.prompt_id, r.prompt_id[:8]) }}</td>
         <td><span class="status status-{{ r.status }}">{{ r.status }}</span></td>
         <td class="muted">{{ r.created_at }}</td>
-        <td><a class="btn small" href="/optimizations/{{ r.id }}/steps">Steps</a></td>
+        <td><a class="btn small" href="/optimizations/{{ r.id }}/iterations">Iterations</a></td>
       </tr>
       {% endfor %}
     </tbody>

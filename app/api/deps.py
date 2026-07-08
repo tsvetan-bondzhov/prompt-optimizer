@@ -22,7 +22,8 @@ from app.db.repositories import (
     EvaluationReportRepository,
     EvaluationRunRepository,
     OptimizationRunRepository,
-    OptimizationStateRepository,
+    PromptRepository,
+    PromptVersionRepository,
     OptimizationStepRepository,
     TestCaseRepository,
 )
@@ -35,7 +36,8 @@ __all__ = [
     "get_db",
     "get_progress_tracker",
     "get_test_case_repository",
-    "get_state_repository",
+    "get_prompt_repository",
+    "get_prompt_version_repository",
     "get_optimization_run_repository",
     "get_step_repository",
     "get_evaluation_run_repository",
@@ -70,10 +72,16 @@ def get_test_case_repository(
     return TestCaseRepository(db)
 
 
-def get_state_repository(
+def get_prompt_repository(
     db: AsyncIOMotorDatabase = Depends(get_db),
-) -> OptimizationStateRepository:
-    return OptimizationStateRepository(db)
+) -> PromptRepository:
+    return PromptRepository(db)
+
+
+def get_prompt_version_repository(
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> PromptVersionRepository:
+    return PromptVersionRepository(db)
 
 
 def get_optimization_run_repository(
@@ -117,11 +125,12 @@ def get_summarizer_service() -> SummarizerService:
 def get_optimizer_service(
     evaluator: EvaluatorService = Depends(get_evaluator_service),
     summarizer: SummarizerService = Depends(get_summarizer_service),
-    states: OptimizationStateRepository = Depends(get_state_repository),
+    states: PromptRepository = Depends(get_prompt_repository),
     runs: OptimizationRunRepository = Depends(get_optimization_run_repository),
     steps: OptimizationStepRepository = Depends(get_step_repository),
     test_cases: TestCaseRepository = Depends(get_test_case_repository),
     reports: EvaluationReportRepository = Depends(get_report_repository),
+    versions: PromptVersionRepository = Depends(get_prompt_version_repository),
     tracker: ProgressTracker = Depends(get_progress_tracker),
 ) -> OptimizerService:
     return OptimizerService(
@@ -132,5 +141,6 @@ def get_optimizer_service(
         steps,
         test_cases,
         report_repository=reports,
+        version_repository=versions,
         progress=tracker,
     )

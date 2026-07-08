@@ -5,11 +5,20 @@
   <h1>{{ 'Optimization' if kind == 'optimization' else 'Evaluation' }} run <code>{{ run_id[:8] }}</code></h1>
   <div class="actions">
     {% if kind == 'optimization' %}
-    <a class="btn" href="/optimizations/{{ run_id }}/steps">View steps</a>
-    <a class="btn" href="/states/{{ run.state_id }}">Back to state</a>
+    <a class="btn" href="/optimizations/{{ run_id }}/iterations">View iterations</a>
+    <a class="btn" href="/prompts/{{ run.prompt_id }}">Back to prompt</a>
     {% else %}
     <a class="btn" href="/evaluations/{{ run_id }}/reports">View reports</a>
+    <form method="post" action="/evaluations/{{ run_id }}/repeat" class="inline"
+          id="repeat-evaluation" {% if run.status != 'completed' %}hidden{% endif %}>
+      <button class="btn primary" type="submit">Repeat evaluation</button>
+    </form>
     {% endif %}
+    <form method="post" action="/runs/{{ run_id }}/stop" class="inline" id="stop-run"
+          {% if run.status not in ('pending', 'running') %}hidden{% endif %}
+          onsubmit="return confirm('Stop this run?');">
+      <button class="btn danger" type="submit">Stop</button>
+    </form>
   </div>
 </div>
 
@@ -27,6 +36,14 @@
     <h3>Current step</h3>
     <p id="current-step" class="muted">—</p>
   </div>
+  {% if kind == 'optimization' %}
+  <div class="card">
+    <h3>Iterations</h3>
+    <div class="progress-bar"><div id="iteration-fill" class="progress-fill"></div></div>
+    <p><span id="iteration-count" class="muted">0 / {{ run.config.max_iterations }} iterations</span></p>
+    <p class="muted">Latest avg score: <span id="iteration-score" class="score">—</span></p>
+  </div>
+  {% endif %}
 </div>
 
 <section>
@@ -44,5 +61,5 @@
   window.RUN_ID = {{ run_id|tojson }};
   window.RUN_KIND = {{ kind|tojson }};
 </script>
-<script src="/static/progress.js"></script>
+<script src="/static/progress.js?v={{ static_v }}"></script>
 {% endblock %}

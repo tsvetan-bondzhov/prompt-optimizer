@@ -1,11 +1,11 @@
 """Optimization models.
 
-Covers the persisted best state (:class:`OptimizationState`), a single loop
+Covers the persisted managed prompt (:class:`Prompt`), a single loop
 invocation (:class:`OptimizationRun`) with its config and progress, one
-iteration (:class:`OptimizationStep`), and the improver input
-(:class:`ImprovementContext`).
+iteration (:class:`OptimizationStep`), and the optimizer input
+(:class:`OptimizationContext`).
 
-Field names match :mod:`app.db.repositories.states`,
+Field names match :mod:`app.db.repositories.prompts`,
 :mod:`app.db.repositories.runs`, and :mod:`app.db.repositories.steps`.
 """
 
@@ -29,6 +29,7 @@ class RunStatus(str, Enum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 class RunConfig(BaseModel):
@@ -51,12 +52,13 @@ class RunConfig(BaseModel):
     )
 
 
-class OptimizationState(BaseModel):
-    """The current best state for a goal/project."""
+class Prompt(BaseModel):
+    """A managed prompt: name, goal, current best text, and latest summary."""
 
     model_config = ConfigDict(extra="forbid")
 
     id: str = Field(default_factory=new_id)
+    name: str = Field(..., min_length=1, description="Human-readable name.")
     goal: str = Field(..., min_length=1)
     current_prompt: str = Field(..., description="Current best prompt text.")
     avg_score: float | None = Field(default=None, ge=1, le=10)
@@ -64,7 +66,50 @@ class OptimizationState(BaseModel):
     strengths: list[str] = Field(default_factory=list)
     weaknesses: list[str] = Field(default_factory=list)
     reasoning: str = Field(default="")
+    optimizer_llm_runner: str = Field(
+        default_factory=lambda: get_settings().ACTIVE_LLM_RUNNER,
+        min_length=1,
+        description="LLM runner used by the prompt optimizer for this prompt.",
+    )
+    optimizer_llm_runner_options: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Runner-specific options for the optimizer's LLM runner.",
+    )
+    summarizer_llm_runner: str = Field(
+        default_factory=lambda: get_settings().ACTIVE_LLM_RUNNER,
+        min_length=1,
+        description=(
+            "LLM runner used to summarize evaluation results for this prompt "
+            "(one selection per prompt — summaries span all its test cases)."
+        ),
+    )
+    summarizer_llm_runner_options: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Runner-specific options for the summarizer's LLM runner.",
+    )
     updated_at: datetime = Field(default_factory=utcnow)
+
+
+class PromptVersion(BaseModel):
+    """A superseded prompt version, snapshotted when the optimizer advances.
+
+    Before an accepted optimization iteration replaces ``current_prompt``, the
+    outgoing text and its measured average score are preserved here so the
+    prompt's history stays browsable.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(default_factory=new_id)
+    prompt_id: str
+    version_number: int = Field(..., ge=1)
+    prompt_text: str
+    avg_score: float | None = Field(default=None, ge=1, le=10)
+    run_id: str | None = Field(
+        default=None,
+        description="Optimization run whose accepted iteration superseded this version.",
+    )
+    created_at: datetime = Field(default_factory=utcnow)
 
 
 class RunProgress(BaseModel):
@@ -85,7 +130,7 @@ class OptimizationRun(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: str = Field(default_factory=new_id)
-    state_id: str
+    prompt_id: str
     config: RunConfig = Field(default_factory=RunConfig)
     status: RunStatus = Field(default=RunStatus.PENDING)
     progress: RunProgress = Field(default_factory=RunProgress)
@@ -115,8 +160,8 @@ class OptimizationStep(BaseModel):
     created_at: datetime = Field(default_factory=utcnow)
 
 
-class ImprovementContext(BaseModel):
-    """Input handed to a :class:`PromptImprover` to propose a better prompt."""
+class OptimizationContext(BaseModel):
+    """Input handed to a :class:`PromptOptimizer` to propose a better prompt."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -127,3 +172,11 @@ class ImprovementContext(BaseModel):
     avg_score: float | None = Field(default=None, ge=1, le=10)
     reasoning: str = Field(default="")
     system_prompt: str | None = Field(default=None)
+    llm_runner_name: str | None = Field(
+        default=None,
+        description="Registered LLM runner the optimizer should use.",
+    )
+    llm_runner_options: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Runner-specific options for the optimizer's LLM runner.",
+    )

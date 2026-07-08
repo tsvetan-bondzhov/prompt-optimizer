@@ -2,7 +2,7 @@
 
 JSON API under ``/api/optimizations``:
 
-- ``POST`` — start the feedback loop for a ``state_id`` with a
+- ``POST`` — start the feedback loop for a ``prompt_id`` with a
   :class:`RunConfig`; creates the run (``pending``), schedules the loop via
   BackgroundTasks, and returns the ``run_id`` immediately.
 - ``GET /{run_id}`` — run status + persisted progress.
@@ -26,13 +26,13 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.api.background import execute_optimization_run
 from app.api.deps import (
     get_optimization_run_repository,
-    get_state_repository,
+    get_prompt_repository,
     get_step_repository,
 )
 from app.api.routes_evaluation import RunStartedResponse
 from app.db.repositories import (
     OptimizationRunRepository,
-    OptimizationStateRepository,
+    PromptRepository,
     OptimizationStepRepository,
 )
 from app.models import OptimizationRun, RunConfig, RunStatus
@@ -41,11 +41,11 @@ router = APIRouter(prefix="/api/optimizations", tags=["optimizations"])
 
 
 class OptimizationStartRequest(BaseModel):
-    """Start an optimization loop for a stored state."""
+    """Start an optimization loop for a stored prompt."""
 
     model_config = ConfigDict(extra="forbid")
 
-    state_id: str = Field(..., min_length=1)
+    prompt_id: str = Field(..., min_length=1)
     config: RunConfig = Field(default_factory=RunConfig)
 
 
@@ -57,23 +57,23 @@ async def start_optimization(
     background_tasks: BackgroundTasks,
     request: Request,
     runs: OptimizationRunRepository = Depends(get_optimization_run_repository),
-    states: OptimizationStateRepository = Depends(get_state_repository),
+    prompts: PromptRepository = Depends(get_prompt_repository),
 ) -> Any:
-    state = await states.get(payload.state_id)
-    if state is None:
+    prompt_doc = await prompts.get(payload.prompt_id)
+    if prompt_doc is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"State {payload.state_id!r} not found.",
+            detail=f"Prompt {payload.prompt_id!r} not found.",
         )
-    if not state.get("test_case_ids"):
+    if not prompt_doc.get("test_case_ids"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"State {payload.state_id!r} has no linked test cases; "
+            detail=f"Prompt {payload.prompt_id!r} has no linked test cases; "
             "add test cases before optimizing.",
         )
 
     run = OptimizationRun(
-        state_id=payload.state_id,
+        prompt_id=payload.prompt_id,
         config=payload.config,
         status=RunStatus.PENDING,
     )
@@ -84,7 +84,7 @@ async def start_optimization(
         request.app.state.db,
         request.app.state.progress_tracker,
         run.id,
-        payload.state_id,
+        payload.prompt_id,
         payload.config,
     )
     return RunStartedResponse(run_id=run.id)

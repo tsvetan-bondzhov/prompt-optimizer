@@ -30,24 +30,29 @@ STEP_FIELDS = {
 }
 
 
-def _setup_state(client):
+def _setup_prompt(client):
     tc = client.post(
         "/api/test-cases",
-        json={"name": "tc", "data": {"input": "x"}, "evaluation_criteria": {}},
-    ).json()
-    state = client.post(
-        "/api/states",
         json={
+            "name": "tc",
+            "data": [{"input": "x"}],
+            "grader_names": ["fake"],
+        },
+    ).json()
+    prompt = client.post(
+        "/api/prompts",
+        json={
+            "name": "prompt-under-test",
             "goal": "goal",
             "current_prompt": "base prompt",
             "test_case_ids": [tc["id"]],
         },
     ).json()
-    return tc, state
+    return tc, prompt
 
 
 def test_start_evaluation_returns_run_id_and_produces_reports(client):
-    tc, _ = _setup_state(client)
+    tc, _ = _setup_prompt(client)
     r = client.post(
         "/api/evaluations",
         json={
@@ -70,8 +75,8 @@ def test_start_evaluation_returns_run_id_and_produces_reports(client):
 
 
 def test_start_evaluation_from_state(client):
-    _, state = _setup_state(client)
-    r = client.post("/api/evaluations", json={"state_id": state["id"]})
+    _, prompt = _setup_prompt(client)
+    r = client.post("/api/evaluations", json={"prompt_id": prompt["id"]})
     assert r.status_code == 202
     run = client.get(f"/api/evaluations/{r.json()['run_id']}").json()
     assert run["prompt"] == "base prompt"
@@ -88,11 +93,11 @@ def test_start_evaluation_requires_prompt_and_test_cases(client):
 
 
 def test_start_optimization_returns_run_id_and_persists_steps(client):
-    _, state = _setup_state(client)
+    _, prompt = _setup_prompt(client)
     r = client.post(
         "/api/optimizations",
         json={
-            "state_id": state["id"],
+            "prompt_id": prompt["id"],
             "config": {
                 "target_score": 9.5,
                 "max_iterations": 2,
@@ -119,19 +124,19 @@ def test_start_optimization_returns_run_id_and_persists_steps(client):
 
 
 def test_start_optimization_rejects_bad_state(client):
-    r = client.post("/api/optimizations", json={"state_id": "missing"})
+    r = client.post("/api/optimizations", json={"prompt_id": "missing"})
     assert r.status_code == 400
 
-    # state without test cases
-    state = client.post(
-        "/api/states", json={"goal": "g", "current_prompt": "p"}
+    # prompt without test cases
+    prompt = client.post(
+        "/api/prompts", json={"name": "p1", "goal": "g", "current_prompt": "p"}
     ).json()
-    r = client.post("/api/optimizations", json={"state_id": state["id"]})
+    r = client.post("/api/optimizations", json={"prompt_id": prompt["id"]})
     assert r.status_code == 400
 
 
 def test_sse_stream_sends_snapshot(client):
-    tc, _ = _setup_state(client)
+    tc, _ = _setup_prompt(client)
     run_id = client.post(
         "/api/evaluations",
         json={"prompt": "p", "test_case_ids": [tc["id"]]},
@@ -150,3 +155,56 @@ def test_sse_stream_sends_snapshot(client):
 
 def test_sse_stream_unknown_run_is_404(client):
     assert client.get("/api/progress/nope/stream").status_code == 404
+
+
+def test_standalone_evaluation_updates_prompt_when_requested(client):
+    _, prompt = _setup_prompt(client)
+    assert prompt["avg_score"] is None
+
+    r = client.post(
+        "/api/evaluations",
+        json={"prompt_id": prompt["id"], "update_prompt": True},
+    )
+    assert r.status_code == 202
+
+    updated = client.get(f"/api/prompts/{prompt['id']}").json()
+    assert updated["avg_score"] is not None
+    assert updated["strengths"]
+    assert updated["current_prompt"] == "base prompt"
+
+
+def test_update_prompt_with_custom_text_replaces_current_prompt(client):
+    _, prompt = _setup_prompt(client)
+    r = client.post(
+        "/api/evaluations",
+        json={
+            "prompt_id": prompt["id"],
+            "prompt": "hand-tuned prompt",
+            "update_prompt": True,
+        },
+    )
+    assert r.status_code == 202
+
+    updated = client.get(f"/api/prompts/{prompt['id']}").json()
+    assert updated["current_prompt"] == "hand-tuned prompt"
+    assert updated["avg_score"] is not None
+
+
+def test_evaluation_without_update_leaves_prompt_untouched(client):
+    _, prompt = _setup_prompt(client)
+    client.post("/api/evaluations", json={"prompt_id": prompt["id"]})
+    untouched = client.get(f"/api/prompts/{prompt['id']}").json()
+    assert untouched["avg_score"] is None
+
+
+def test_update_prompt_requires_prompt_id(client):
+    tc, _ = _setup_prompt(client)
+    r = client.post(
+        "/api/evaluations",
+        json={
+            "prompt": "p",
+            "test_case_ids": [tc["id"]],
+            "update_prompt": True,
+        },
+    )
+    assert r.status_code == 400

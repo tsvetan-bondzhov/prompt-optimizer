@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if prompt else 'New' }} Prompt — Prompt Optimizer{% endblock %}
+{% block content %}
+<h1>{{ 'Edit prompt' if prompt else 'New prompt' }}</h1>
+
+<form method="post" action="{{ '/prompts/' + prompt.id if prompt else '/prompts' }}" class="stacked">
+  <label>Name
+    <input type="text" name="name" required value="{{ prompt.name if prompt else '' }}"
+           placeholder="A short, unique name for this prompt">
+  </label>
+  <label>Goal
+    <input type="text" name="goal" required value="{{ prompt.goal if prompt else '' }}"
+           placeholder="What should the prompt achieve?">
+  </label>
+  <label>Current prompt
+    <textarea name="current_prompt" rows="10" required>{{ prompt.current_prompt if prompt else '' }}</textarea>
+  </label>
+  {% if prompt %}<p class="muted">Editing the prompt text resets the measured score — the next optimization run re-establishes a baseline.</p>{% endif %}
+  <label>LLM runner for the optimizer
+    <select name="optimizer_llm_runner">
+      {% set current_runner = prompt.optimizer_llm_runner if prompt and prompt.optimizer_llm_runner else '' %}
+      {% for r in available_llm_runners %}
+      <option value="{{ r }}" {% if r == current_runner %}selected{% endif %}>{{ r }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <div id="optimizer-runner-options" class="runner-options"></div>
+  <label>LLM runner for the summarizer
+    <select name="summarizer_llm_runner">
+      {% set current_summarizer_runner = prompt.summarizer_llm_runner if prompt and prompt.summarizer_llm_runner is defined and prompt.summarizer_llm_runner else '' %}
+      {% for r in available_llm_runners %}
+      <option value="{{ r }}" {% if r == current_summarizer_runner %}selected{% endif %}>{{ r }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <div id="summarizer-runner-options" class="runner-options"></div>
+  <fieldset>
+    <legend>Test cases</legend>
+    {% if test_cases %}
+      {% set linked = prompt.test_case_ids if prompt else [] %}
+      {% for tc in test_cases %}
+      <label class="check">
+        <input type="checkbox" name="test_case_ids" value="{{ tc.id }}"
+               {% if tc.id in linked %}checked{% endif %}>
+        {{ tc.name }}
+      </label>
+      {% endfor %}
+    {% else %}
+      <p class="muted">No test cases exist yet — <a href="/test-cases/new">create some</a> first.</p>
+    {% endif %}
+  </fieldset>
+  <div class="actions">
+    <button class="btn primary" type="submit">Save</button>
+    <a class="btn" href="{{ '/prompts/' + prompt.id if prompt else '/prompts' }}">Cancel</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/runner_options.js?v={{ static_v }}"></script>
+<script>
+  window.LLM_RUNNER_OPTIONS = {{ llm_runner_options_map|tojson }};
+  initRunnerOptions(
+    "optimizer_llm_runner",
+    "optimizer-runner-options",
+    {{ (prompt.optimizer_llm_runner_options if prompt and prompt.optimizer_llm_runner_options is defined and prompt.optimizer_llm_runner_options else {})|tojson }},
+    {{ (prompt.optimizer_llm_runner if prompt and prompt.optimizer_llm_runner else '')|tojson }}
+  );
+  initRunnerOptions(
+    "summarizer_llm_runner",
+    "summarizer-runner-options",
+    {{ (prompt.summarizer_llm_runner_options if prompt and prompt.summarizer_llm_runner_options is defined and prompt.summarizer_llm_runner_options else {})|tojson }},
+    {{ (prompt.summarizer_llm_runner if prompt and prompt.summarizer_llm_runner is defined and prompt.summarizer_llm_runner else '')|tojson }}
+  );
+</script>
+{% endblock %}

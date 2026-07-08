@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Report — Prompt Optimizer{% endblock %}
+{% block title %}Report â€” Prompt Optimizer{% endblock %}
 {% block content %}
 <div class="section-head">
   <h1>Evaluation report <code>{{ report.id[:8] }}</code></h1>
@@ -20,7 +20,7 @@
 </div>
 
 <section>
-  <h2>Prompt</h2>
+  <h2>Prompt{% if report.prompt_name %} — {{ report.prompt_name }}{% endif %}</h2>
   <pre class="prompt">{{ report.prompt }}</pre>
 </section>
 
@@ -32,11 +32,11 @@
 <div class="cards">
   <div class="card ok">
     <h3>Strengths</h3>
-    <ul>{% for s in report.strengths %}<li>{{ s }}</li>{% else %}<li class="muted">—</li>{% endfor %}</ul>
+    <ul>{% for s in report.strengths %}<li>{{ s }}</li>{% else %}<li class="muted">â€”</li>{% endfor %}</ul>
   </div>
   <div class="card warn">
     <h3>Weaknesses</h3>
-    <ul>{% for w in report.weaknesses %}<li>{{ w }}</li>{% else %}<li class="muted">—</li>{% endfor %}</ul>
+    <ul>{% for w in report.weaknesses %}<li>{{ w }}</li>{% else %}<li class="muted">â€”</li>{% endfor %}</ul>
   </div>
 </div>
 
@@ -45,15 +45,15 @@
   <pre class="prompt">{{ report.reasoning }}</pre>
 </section>
 
-{% if report.step_evaluations %}
+{% if report.grader_evaluations %}
 <section>
-  <h2>Per-step evaluations</h2>
+  <h2>Per-grader evaluations</h2>
   <table>
-    <thead><tr><th>Step</th><th>Score</th><th>Strengths</th><th>Weaknesses</th><th>Reasoning</th></tr></thead>
+    <thead><tr><th>Grader</th><th>Score</th><th>Strengths</th><th>Weaknesses</th><th>Reasoning</th></tr></thead>
     <tbody>
-      {% for e in report.step_evaluations %}
+      {% for e in report.grader_evaluations %}
       <tr>
-        <td>{{ e.step_name or 'step' }}</td>
+        <td>{{ e.grader_name or 'grader' }}</td>
         <td><span class="score">{{ e.score }}</span></td>
         <td><ul class="compact">{% for s in e.strengths %}<li>{{ s }}</li>{% endfor %}</ul></td>
         <td><ul class="compact">{% for w in e.weaknesses %}<li>{{ w }}</li>{% endfor %}</ul></td>

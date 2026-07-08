@@ -1,6 +1,6 @@
 """Evaluation models.
 
-Covers the output of individual evaluation steps (:class:`PromptEvaluation`),
+Covers the output of individual graders (:class:`PromptEvaluation`),
 the in-memory aggregation of a single evaluation point
 (:class:`EvaluationPoint`), the persisted point (:class:`EvaluationReport`), the
 grouping run (:class:`EvaluationRun`), and the merged summary
@@ -20,22 +20,23 @@ from app.models.common import new_id, utcnow
 
 
 class PromptEvaluation(BaseModel):
-    """Structured result of a single evaluation step.
+    """Structured result of a single grader.
 
     Constraints (plan §5):
       - ``score`` is an integer in ``[1, 10]``.
-      - ``strengths`` / ``weaknesses`` each contain 1–3 non-empty items.
+      - ``strengths`` / ``weaknesses`` hold up to 3 non-empty items each
+        (empty lists are fine — only report what adds information).
       - ``reasoning`` is a non-empty string.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    strengths: list[str] = Field(..., min_length=1, max_length=3)
-    weaknesses: list[str] = Field(..., min_length=1, max_length=3)
+    strengths: list[str] = Field(default_factory=list, max_length=3)
+    weaknesses: list[str] = Field(default_factory=list, max_length=3)
     reasoning: str = Field(..., min_length=1)
     score: int = Field(..., ge=1, le=10)
-    step_name: str | None = Field(
-        default=None, description="Name of the evaluation step that produced this."
+    grader_name: str | None = Field(
+        default=None, description="Name of the grader that produced this."
     )
 
     @field_validator("strengths", "weaknesses")
@@ -54,11 +55,24 @@ class PromptEvaluation(BaseModel):
         return value
 
 
+class DataEntryResult(BaseModel):
+    """The executed + graded outcome of a single data entry."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    entry_index: int = Field(..., ge=0)
+    prompt_result: str = Field(..., description="The execution output text.")
+    grader_evaluations: list[PromptEvaluation] = Field(default_factory=list)
+    score: float = Field(..., ge=1, le=10)
+
+
 class EvaluationPoint(BaseModel):
     """One ``(test_case × execution_index)`` evaluation, in memory.
 
-    Holds the executed result, the per-step evaluations, and the aggregated
-    score for the point (default aggregation: mean of step scores).
+    Each data entry of the test case is executed and graded individually
+    (see :class:`DataEntryResult`); ``aggregated_score`` is the mean of the
+    per-entry scores. ``prompt_result`` and ``grader_evaluations`` are the
+    flattened views across all entries (kept for reports/summaries).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -66,7 +80,8 @@ class EvaluationPoint(BaseModel):
     test_case_id: str
     execution_index: int = Field(..., ge=0)
     prompt_result: str = Field(..., description="The execution output text.")
-    step_evaluations: list[PromptEvaluation] = Field(default_factory=list)
+    entry_results: list[DataEntryResult] = Field(default_factory=list)
+    grader_evaluations: list[PromptEvaluation] = Field(default_factory=list)
     aggregated_score: float = Field(..., ge=1, le=10)
 
 
@@ -92,12 +107,16 @@ class EvaluationReport(BaseModel):
     )
     test_case_id: str
     prompt: str = Field(..., description="The prompt text under evaluation.")
+    prompt_name: str | None = Field(
+        default=None, description="Name of the stored prompt, when one was used."
+    )
     prompt_result: str = Field(..., description="The execution output text.")
     score: float = Field(..., ge=1, le=10)
     strengths: list[str] = Field(default_factory=list)
     weaknesses: list[str] = Field(default_factory=list)
     reasoning: str = Field(default="")
-    step_evaluations: list[PromptEvaluation] = Field(default_factory=list)
+    grader_evaluations: list[PromptEvaluation] = Field(default_factory=list)
+    entry_results: list[DataEntryResult] = Field(default_factory=list)
 
 
 class EvaluationRun(BaseModel):
@@ -111,6 +130,9 @@ class EvaluationRun(BaseModel):
     id: str = Field(default_factory=new_id)
     created_at: datetime = Field(default_factory=utcnow)
     prompt: str = Field(..., description="The prompt text evaluated by this run.")
+    prompt_name: str | None = Field(
+        default=None, description="Name of the stored prompt, when one was used."
+    )
     test_case_ids: list[str] = Field(default_factory=list)
     executions_per_test_case: int = Field(default=1, ge=1)
     avg_score: float | None = Field(

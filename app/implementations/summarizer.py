@@ -1,13 +1,13 @@
 """Reference :class:`Summarizer` implementations (Task 10).
 
-Two summarizers condense many per-step :class:`PromptEvaluation` objects (across
+Two summarizers condense many per-grader :class:`PromptEvaluation` objects (across
 all test cases × executions) into a single compact :class:`EvaluationSummary`
 (consolidated strengths, weaknesses, reasoning) used to update optimizer state
 and feed the next improvement step.
 
 * :class:`FrequencySummarizer` (registered ``frequency``) — a deterministic,
   offline aggregator. It ranks strengths/weaknesses by frequency, keeps the
-  top-K of each, and concatenates/trims the per-step reasoning. It performs
+  top-K of each, and concatenates/trims the per-grader reasoning. It performs
   **zero external/LLM calls**, making it suitable for tests and offline mode.
 
 * :class:`LLMSummarizer` (registered ``default``) — composes all
@@ -29,7 +29,7 @@ import logging
 from collections import Counter
 from typing import Any
 
-from app.core.interfaces import Summarizer
+from app.core.interfaces import LLMRunner, Summarizer
 from app.core.registry import get_llm_runner, register
 from app.models import EvaluationSummary, PromptEvaluation
 
@@ -43,7 +43,7 @@ __all__ = [
 logger = logging.getLogger(__name__)
 
 # Default cap on the number of strengths/weaknesses kept in a summary, sized to
-# fit comfortably inside the improver's context window.
+# fit comfortably inside the optimizer's context window.
 DEFAULT_TOP_K = 3
 
 
@@ -138,7 +138,9 @@ class FrequencySummarizer(Summarizer):
         self._top_k = max(1, top_k)
 
     async def summarize(
-        self, evaluations: list[PromptEvaluation]
+        self,
+        evaluations: list[PromptEvaluation],
+        llm_runner: LLMRunner | None = None,
     ) -> EvaluationSummary:
         """Merge ``evaluations`` into one summary by frequency (no I/O)."""
 
@@ -148,7 +150,7 @@ class FrequencySummarizer(Summarizer):
 class LLMSummarizer(Summarizer):
     """LLM-backed summarizer with a deterministic frequency fallback.
 
-    Composes the per-step strengths/weaknesses/reasoning + scores into a prompt,
+    Composes the per-grader strengths/weaknesses/reasoning + scores into a prompt,
     asks the *active* :class:`LLMRunner` for a concise structured JSON summary,
     and parses it into an :class:`EvaluationSummary` bounded by ``top_k``. Any
     runner, parse, or validation failure falls back to
@@ -172,9 +174,11 @@ class LLMSummarizer(Summarizer):
         self._top_k = max(1, top_k)
 
     async def summarize(
-        self, evaluations: list[PromptEvaluation]
+        self,
+        evaluations: list[PromptEvaluation],
+        llm_runner: LLMRunner | None = None,
     ) -> EvaluationSummary:
-        """Summarize ``evaluations`` via the active LLM, falling back on error."""
+        """Summarize ``evaluations`` via the selected LLM, falling back on error."""
 
         if not evaluations:
             return aggregate_by_frequency(evaluations, self._top_k)
@@ -182,7 +186,7 @@ class LLMSummarizer(Summarizer):
         user_prompt = self._compose_user_prompt(evaluations)
 
         try:
-            runner = get_llm_runner()
+            runner = llm_runner if llm_runner is not None else get_llm_runner()
             raw = await runner.run(self.SYSTEM_PROMPT, user_prompt)
             return self._parse_summary(raw)
         except Exception as exc:  # noqa: BLE001 - fall back on any failure
@@ -198,7 +202,7 @@ class LLMSummarizer(Summarizer):
 
         payload = [
             {
-                "step_name": evaluation.step_name,
+                "grader_name": evaluation.grader_name,
                 "score": evaluation.score,
                 "strengths": evaluation.strengths,
                 "weaknesses": evaluation.weaknesses,

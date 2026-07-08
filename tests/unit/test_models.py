@@ -24,8 +24,9 @@ def test_score_bounds_enforced():
 
 
 def test_strengths_weaknesses_bounds():
-    with pytest.raises(ValidationError):
-        PromptEvaluation(strengths=[], weaknesses=["w"], reasoning="r", score=5)
+    # Empty lists are allowed — graders omit entries that add no information.
+    empty = PromptEvaluation(strengths=[], weaknesses=[], reasoning="r", score=5)
+    assert empty.strengths == [] and empty.weaknesses == []
     with pytest.raises(ValidationError):
         PromptEvaluation(
             strengths=["a", "b", "c", "d"], weaknesses=["w"], reasoning="r", score=5
@@ -57,3 +58,77 @@ def test_run_config_bounds():
 def test_test_case_create_requires_name():
     with pytest.raises(ValidationError):
         TestCaseCreate(name="")
+
+
+def test_test_case_data_coerces_legacy_object():
+    tc = TestCaseCreate(name="tc", data={"input": "x"})
+    assert tc.data == [{"input": "x"}]
+
+
+def test_stored_test_case_ignores_legacy_summarizer_fields():
+    # summarizer_llm_runner moved to the prompt; documents written before the
+    # move must still validate (unknown keys are ignored, not rejected).
+    from app.models import TestCase
+
+    tc = TestCase.model_validate(
+        {
+            "name": "tc",
+            "summarizer_llm_runner": "ollama",
+            "summarizer_llm_runner_options": {"model": "mistral"},
+        }
+    )
+    assert not hasattr(tc, "summarizer_llm_runner")
+
+
+def test_prompt_carries_summarizer_runner_selection():
+    from app.models import Prompt
+
+    prompt = Prompt(
+        name="p",
+        goal="g",
+        current_prompt="text",
+        summarizer_llm_runner="ollama",
+        summarizer_llm_runner_options={"temperature": 0.1},
+    )
+    assert prompt.summarizer_llm_runner == "ollama"
+    assert prompt.summarizer_llm_runner_options == {"temperature": 0.1}
+
+
+def test_criteria_resolved_per_key_with_dataset_fallback():
+    from app.models import TestCase
+
+    tc = TestCase(
+        name="tc",
+        data=[{"a": 1}, {"a": 2}, {"a": 3}],
+        evaluation_criteria_per_entry=[{"keywords": ["one"]}, {}],
+        evaluation_criteria={"keywords": ["fallback"]},
+    )
+    # A key present per entry wins over the dataset value.
+    assert tc.criteria_for_entry(0) == {"keywords": ["one"]}
+    # Empty per-entry criteria falls back to the dataset criteria.
+    assert tc.criteria_for_entry(1) == {"keywords": ["fallback"]}
+    # Missing per-entry criteria (index out of range) falls back too.
+    assert tc.criteria_for_entry(2) == {"keywords": ["fallback"]}
+
+
+def test_criteria_keys_can_mix_entry_and_dataset_levels():
+    from app.models import TestCase
+
+    tc = TestCase(
+        name="tc",
+        data=[{"a": 1}, {"a": 2}],
+        # expected_json varies per entry; json_schema is dataset-wide.
+        evaluation_criteria_per_entry=[
+            {"expected_json": {"answer": 1}},
+            {"expected_json": {"answer": 2}},
+        ],
+        evaluation_criteria={"json_schema": {"type": "object"}},
+    )
+    assert tc.criteria_for_entry(0) == {
+        "expected_json": {"answer": 1},
+        "json_schema": {"type": "object"},
+    }
+    assert tc.criteria_for_entry(1) == {
+        "expected_json": {"answer": 2},
+        "json_schema": {"type": "object"},
+    }

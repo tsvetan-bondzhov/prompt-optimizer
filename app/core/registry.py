@@ -7,8 +7,8 @@ Services then resolve the *active* implementation by name from
 
 Categories:
     ``executor``            -> :class:`~app.core.interfaces.PromptExecutor`
-    ``evaluation_prepare``  -> :class:`~app.core.interfaces.PrepareEvaluation`
-    ``improver``            -> :class:`~app.core.interfaces.PromptImprover`
+    ``grader``              -> :class:`~app.core.interfaces.Grader`
+    ``optimizer``            -> :class:`~app.core.interfaces.PromptOptimizer`
     ``summarizer``          -> :class:`~app.core.interfaces.Summarizer`
     ``llm_runner``          -> :class:`~app.core.interfaces.LLMRunner`
     ``aggregator``          -> :class:`~app.core.interfaces.Aggregator`
@@ -24,10 +24,10 @@ from typing import Any, Callable
 from app.config import get_settings
 from app.core.interfaces import (
     Aggregator,
-    EvaluationStep,
+    Grader,
     LLMRunner,
     PromptExecutor,
-    PromptImprover,
+    PromptOptimizer,
     Summarizer,
     mean_aggregator,
 )
@@ -39,10 +39,11 @@ __all__ = [
     "register",
     "resolve",
     "available",
+    "describe",
     "clear",
     "get_executor",
-    "get_evaluation_steps",
-    "get_improver",
+    "get_grader",
+    "get_prompt_optimizer",
     "get_summarizer",
     "get_llm_runner",
     "get_aggregator",
@@ -53,8 +54,8 @@ Factory = Callable[[], Any]
 
 CATEGORIES: tuple[str, ...] = (
     "executor",
-    "evaluation_prepare",
-    "improver",
+    "grader",
+    "optimizer",
     "summarizer",
     "llm_runner",
     "aggregator",
@@ -128,6 +129,37 @@ def available(category: str) -> list[str]:
     return sorted(_REGISTRY[category])
 
 
+def describe(category: str) -> list[dict[str, Any]]:
+    """Return UI metadata for every implementation registered in ``category``.
+
+    Each item: ``{"name", "display_name", "description", "criteria_info",
+    "criteria_sample", "options_schema"}`` — read from the instantiated
+    implementation's class attributes, with sensible fallbacks so
+    implementations without metadata still render.
+    """
+
+    infos: list[dict[str, Any]] = []
+    for name in available(category):
+        try:
+            instance = resolve(category, name)
+        except Exception:  # pragma: no cover - defensive: bad factory
+            infos.append({"name": name, "display_name": name})
+            continue
+        infos.append(
+            {
+                "name": name,
+                "display_name": getattr(instance, "display_name", "") or name,
+                "description": getattr(instance, "description", "") or "",
+                "criteria_info": list(getattr(instance, "criteria_info", []) or []),
+                "criteria_sample": getattr(instance, "criteria_sample", None),
+                "options_schema": list(
+                    getattr(instance, "options_schema", []) or []
+                ),
+            }
+        )
+    return infos
+
+
 def clear(category: str | None = None) -> None:
     """Clear registrations for ``category`` (or all categories when ``None``)."""
 
@@ -142,29 +174,26 @@ def clear(category: str | None = None) -> None:
 # --- Settings-driven resolver helpers ------------------------------------
 
 
-def get_executor() -> PromptExecutor:
-    """Resolve the active :class:`PromptExecutor` from settings."""
+def get_executor(name: str | None = None) -> PromptExecutor:
+    """Resolve a :class:`PromptExecutor` by ``name`` (active one when omitted)."""
 
-    return resolve("executor", get_settings().ACTIVE_EXECUTOR)
+    return resolve("executor", name or get_settings().ACTIVE_EXECUTOR)
 
 
-def get_evaluation_steps() -> list[EvaluationStep]:
-    """Call the active ``prepare_evaluation()`` factory and return its steps.
+def get_grader(name: str) -> Grader:
+    """Resolve a :class:`Grader` registered under ``name``.
 
-    The active prepare key reuses ``ACTIVE_EXECUTOR`` since the executor and the
-    evaluation steps form a matched user-supplied pair.
+    Graders are selected **per test case** (``TestCase.grader_names``); use
+    :func:`available` with the ``"grader"`` category to list the choices.
     """
 
-    # The registered factory IS ``prepare_evaluation``; resolving it invokes the
-    # factory, which returns the ordered list of EvaluationStep instances.
-    steps = resolve("evaluation_prepare", get_settings().ACTIVE_EXECUTOR)
-    return steps
+    return resolve("grader", name)
 
 
-def get_improver() -> PromptImprover:
-    """Resolve the active :class:`PromptImprover` from settings."""
+def get_prompt_optimizer() -> PromptOptimizer:
+    """Resolve the active :class:`PromptOptimizer` from settings."""
 
-    return resolve("improver", get_settings().ACTIVE_IMPROVER)
+    return resolve("optimizer", get_settings().ACTIVE_OPTIMIZER)
 
 
 def get_summarizer() -> Summarizer:
@@ -173,10 +202,10 @@ def get_summarizer() -> Summarizer:
     return resolve("summarizer", get_settings().ACTIVE_SUMMARIZER)
 
 
-def get_llm_runner() -> LLMRunner:
-    """Resolve the active :class:`LLMRunner` from settings."""
+def get_llm_runner(name: str | None = None) -> LLMRunner:
+    """Resolve an :class:`LLMRunner` by ``name`` (active one when omitted)."""
 
-    return resolve("llm_runner", get_settings().ACTIVE_LLM_RUNNER)
+    return resolve("llm_runner", name or get_settings().ACTIVE_LLM_RUNNER)
 
 
 def get_aggregator() -> Aggregator:

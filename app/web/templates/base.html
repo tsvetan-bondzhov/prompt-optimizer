@@ -4,14 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Prompt Optimizer{% endblock %}</title>
-  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/styles.css?v={{ static_v }}">
 </head>
 <body>
   <nav class="nav">
     <span class="brand">⚙ Prompt Optimizer</span>
     <a href="/">Dashboard</a>
     <a href="/test-cases">Test Cases</a>
-    <a href="/states/new">New State</a>
+    <a href="/prompts">Prompts</a>
     <a href="/evaluate">Run Evaluation</a>
     <a href="/optimize">Run Optimization</a>
   </nav>

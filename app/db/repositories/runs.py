@@ -35,13 +35,13 @@ class OptimizationRunRepository(BaseRepository):
         doc = await self.collection.find_one({"_id": run_id})
         return from_doc(doc)
 
-    async def list_by_state(
-        self, state_id: str, *, skip: int = 0, limit: int = 100
+    async def list_by_prompt(
+        self, prompt_id: str, *, skip: int = 0, limit: int = 100
     ) -> list[dict[str, Any]]:
-        """List runs for a given ``state_id`` (newest first)."""
+        """List runs for a given ``prompt_id`` (newest first)."""
 
         cursor = (
-            self.collection.find({"state_id": state_id})
+            self.collection.find({"prompt_id": prompt_id})
             .sort("created_at", -1)
             .skip(skip)
             .limit(limit)

@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}{{ prompt.goal }} — Prompt Optimizer{% endblock %}
+{% block content %}
+<div class="section-head">
+  <h1>{{ prompt.name }}</h1>
+  <p class="muted">{{ prompt.goal }}</p>
+  <div class="actions">
+    <a class="btn" href="/prompts/{{ prompt.id }}/edit">Edit</a>
+    <a class="btn" href="/evaluate?prompt_id={{ prompt.id }}">Evaluate</a>
+    <a class="btn primary" href="/optimize?prompt_id={{ prompt.id }}">Optimize</a>
+    <form method="post" action="/prompts/{{ prompt.id }}/delete" class="inline"
+          onsubmit="return confirm('Delete this prompt?');">
+      <button class="btn danger" type="submit">Delete</button>
+    </form>
+  </div>
+</div>
+
+<div class="cards">
+  <div class="card">
+    <h3>Average score</h3>
+    {% if prompt.avg_score is not none %}
+      <p class="big-score">{{ '%.2f'|format(prompt.avg_score) }} <span class="muted">/ 10</span></p>
+    {% else %}
+      <p class="muted">No baseline yet — run an optimization to establish one.</p>
+    {% endif %}
+  </div>
+  <div class="card">
+    <h3>Test cases ({{ linked_test_cases|length }})</h3>
+    <ul>
+      {% for tc in linked_test_cases %}<li>{{ tc.name }}</li>{% else %}<li class="muted">none linked</li>{% endfor %}
+    </ul>
+  </div>
+</div>
+
+<section>
+  <h2>Current prompt</h2>
+  <div class="copy-wrap">
+    <button type="button" class="copy-btn" id="copy-current-prompt"
+            title="Copy to clipboard" aria-label="Copy prompt to clipboard">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <rect x="5" y="5" width="9" height="10" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v8A1.5 1.5 0 0 0 3.5 13H5"
+              stroke="currentColor" stroke-width="1.5"/>
+      </svg>
+    </button>
+    <pre class="prompt" id="current-prompt-text">{{ prompt.current_prompt }}</pre>
+  </div>
+</section>
+
+{% if prompt.strengths or prompt.weaknesses or prompt.reasoning %}
+<section>
+  <h2>Latest summary</h2>
+  <div class="cards">
+    <div class="card ok">
+      <h3>Strengths</h3>
+      <ul>{% for s in prompt.strengths %}<li>{{ s }}</li>{% else %}<li class="muted">—</li>{% endfor %}</ul>
+    </div>
+    <div class="card warn">
+      <h3>Weaknesses</h3>
+      <ul>{% for w in prompt.weaknesses %}<li>{{ w }}</li>{% else %}<li class="muted">—</li>{% endfor %}</ul>
+    </div>
+  </div>
+  {% if prompt.reasoning %}<h3>Reasoning</h3><pre class="prompt">{{ prompt.reasoning }}</pre>{% endif %}
+</section>
+{% endif %}
+
+<section>
+  <h2>Versions</h2>
+  {% if versions %}
+  <table>
+    <thead><tr><th>Version</th><th>Avg score</th><th>Saved</th><th>Run</th><th></th></tr></thead>
+    <tbody>
+      {% for v in versions %}
+      <tr>
+        <td>v{{ v.version_number }}</td>
+        <td>{% if v.avg_score is not none %}<span class="score">{{ '%.2f'|format(v.avg_score) }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td class="muted">{{ v.created_at }}</td>
+        <td>{% if v.run_id %}<a href="/runs/{{ v.run_id }}"><code>{{ v.run_id[:8] }}</code></a>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td><a class="btn small" href="/prompts/{{ prompt.id }}/versions/{{ v.id }}">Details</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted">No saved versions yet — accepted optimization iterations preserve the previous version here.</p>{% endif %}
+</section>
+
+<section>
+  <h2>Optimization runs</h2>
+  {% if runs %}
+  <table>
+    <thead><tr><th>Run</th><th>Status</th><th>Created</th><th></th></tr></thead>
+    <tbody>
+      {% for r in runs %}
+      <tr>
+        <td><a href="/runs/{{ r.id }}"><code>{{ r.id[:8] }}</code></a></td>
+        <td><span class="status status-{{ r.status }}">{{ r.status }}</span></td>
+        <td class="muted">{{ r.created_at }}</td>
+        <td><a class="btn small" href="/optimizations/{{ r.id }}/iterations">Iterations</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted">No runs yet for this prompt.</p>{% endif %}
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+  (function () {
+    "use strict";
+    var btn = document.getElementById("copy-current-prompt");
+    var pre = document.getElementById("current-prompt-text");
+    if (!btn || !pre || !navigator.clipboard) return;
+    var icon = btn.innerHTML;
+    btn.addEventListener("click", function () {
+      navigator.clipboard.writeText(pre.textContent).then(function () {
+        btn.classList.add("copied");
+        btn.innerHTML = "&#10003;";
+        setTimeout(function () {
+          btn.classList.remove("copied");
+          btn.innerHTML = icon;
+        }, 1500);
+      });
+    });
+  })();
+</script>
+{% endblock %}

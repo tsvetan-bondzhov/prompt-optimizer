@@ -27,13 +27,13 @@ from app.api.background import execute_evaluation_run
 from app.api.deps import (
     get_evaluation_run_repository,
     get_report_repository,
-    get_state_repository,
+    get_prompt_repository,
     get_test_case_repository,
 )
 from app.db.repositories import (
     EvaluationReportRepository,
     EvaluationRunRepository,
-    OptimizationStateRepository,
+    PromptRepository,
     TestCaseRepository,
 )
 from app.models import EvaluationRun, RunStatus, TestCase
@@ -45,16 +45,23 @@ class EvaluationStartRequest(BaseModel):
     """Start a standalone evaluation.
 
     The prompt comes either from ``prompt`` (explicit text) or from the current
-    prompt of the state referenced by ``state_id``. Test cases likewise: an
-    explicit ``test_case_ids`` selection, or the state's linked test cases.
+    prompt of the stored prompt referenced by ``prompt_id``. Test cases likewise: an
+    explicit ``test_case_ids`` selection, or the stored prompt's linked test cases.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     prompt: Optional[str] = Field(default=None, min_length=1)
-    state_id: Optional[str] = Field(default=None)
+    prompt_id: Optional[str] = Field(default=None)
     test_case_ids: list[str] = Field(default_factory=list)
     executions_per_test_case: int = Field(default=1, ge=1)
+    update_prompt: bool = Field(
+        default=False,
+        description=(
+            "Update the stored prompt (requires 'prompt_id') with this "
+            "run's measured score, summary, and evaluated text."
+        ),
+    )
 
 
 class RunStartedResponse(BaseModel):
@@ -94,34 +101,42 @@ async def start_evaluation(
     request: Request,
     runs: EvaluationRunRepository = Depends(get_evaluation_run_repository),
     test_case_repo: TestCaseRepository = Depends(get_test_case_repository),
-    states: OptimizationStateRepository = Depends(get_state_repository),
+    prompts: PromptRepository = Depends(get_prompt_repository),
 ) -> Any:
     prompt_text = payload.prompt
+    prompt_name: str | None = None
     test_case_ids = list(payload.test_case_ids)
 
-    if payload.state_id is not None:
-        state = await states.get(payload.state_id)
-        if state is None:
+    if payload.prompt_id is not None:
+        prompt_doc = await prompts.get(payload.prompt_id)
+        if prompt_doc is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"State {payload.state_id!r} not found.",
+                detail=f"Prompt {payload.prompt_id!r} not found.",
             )
+        prompt_name = prompt_doc.get("name")
         if prompt_text is None:
-            prompt_text = state.get("current_prompt")
+            prompt_text = prompt_doc.get("current_prompt")
         if not test_case_ids:
-            test_case_ids = list(state.get("test_case_ids") or [])
+            test_case_ids = list(prompt_doc.get("test_case_ids") or [])
 
     if not prompt_text:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A prompt is required (either 'prompt' or a 'state_id' "
-            "whose state has a current prompt).",
+            detail="A prompt is required (either 'prompt' or a 'prompt_id' "
+            "whose prompt has a current prompt text).",
+        )
+    if payload.update_prompt and payload.prompt_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="'update_prompt' requires a 'prompt_id'.",
         )
 
     test_cases = await resolve_test_cases(test_case_ids, test_case_repo)
 
     run = EvaluationRun(
         prompt=prompt_text,
+        prompt_name=prompt_name,
         test_case_ids=[tc.id for tc in test_cases],
         executions_per_test_case=payload.executions_per_test_case,
         status=RunStatus.PENDING.value,
@@ -136,6 +151,9 @@ async def start_evaluation(
         prompt_text,
         test_cases,
         payload.executions_per_test_case,
+        prompt_name,
+        payload.prompt_id,
+        payload.update_prompt,
     )
     return RunStartedResponse(run_id=run.id)
 

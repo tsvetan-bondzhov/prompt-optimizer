@@ -6,15 +6,15 @@ from collections import deque
 from typing import Iterable, Optional
 
 from app.core.interfaces import (
-    EvaluationStep,
+    Grader,
     PromptExecutor,
-    PromptImprover,
+    PromptOptimizer,
     Summarizer,
 )
 from app.models import (
     EvaluationSummary,
-    ImprovementContext,
-    Prompt,
+    OptimizationContext,
+    PromptText,
     PromptEvaluation,
     PromptResult,
     TestCase,
@@ -27,12 +27,18 @@ class FakeExecutor(PromptExecutor):
     def __init__(self) -> None:
         self.calls: list[tuple[str, str]] = []
 
-    async def execute(self, prompt: Prompt, test_case: TestCase) -> PromptResult:
+    async def execute(
+        self,
+        prompt: PromptText,
+        test_case: TestCase,
+        entry: dict | None = None,
+        llm_runner=None,
+    ) -> PromptResult:
         self.calls.append((prompt.text, test_case.id))
         return PromptResult(text=f"result[{test_case.name}]: {prompt.text}")
 
 
-class FakeEvaluationStep(EvaluationStep):
+class FakeGrader(Grader):
     """Returns a scripted sequence of scores (repeating the last one)."""
 
     def __init__(self, name: str = "fake-step", scores: Iterable[int] = (8,)) -> None:
@@ -41,8 +47,11 @@ class FakeEvaluationStep(EvaluationStep):
         self._last = self._scores[-1]
         self.calls = 0
 
-    async def evaluate(
-        self, result: PromptResult, test_case: TestCase
+    async def grade(
+        self,
+        result: PromptResult,
+        test_case: TestCase,
+        entry_index: int = 0,
     ) -> PromptEvaluation:
         self.calls += 1
         score = self._scores.popleft() if self._scores else self._last
@@ -51,40 +60,45 @@ class FakeEvaluationStep(EvaluationStep):
             weaknesses=[f"weakness-{score}"],
             reasoning=f"scripted score {score} for {test_case.name}",
             score=score,
-            step_name=self.name,
+            grader_name=self.name,
         )
 
 
-class FailingEvaluationStep(EvaluationStep):
+class FailingGrader(Grader):
     """Always raises — used to exercise per-point failure isolation."""
 
     name = "failing-step"
 
-    async def evaluate(
-        self, result: PromptResult, test_case: TestCase
+    async def grade(
+        self,
+        result: PromptResult,
+        test_case: TestCase,
+        entry_index: int = 0,
     ) -> PromptEvaluation:
         raise RuntimeError("scripted step failure")
 
 
-class FakeImprover(PromptImprover):
+class FakeOptimizer(PromptOptimizer):
     """Returns scripted prompts (default: appends an iteration marker)."""
 
     def __init__(self, prompts: Optional[Iterable[str]] = None) -> None:
         self._prompts = deque(prompts or [])
         self.calls = 0
 
-    async def improve(self, ctx: ImprovementContext) -> Prompt:
+    async def optimize(self, ctx: OptimizationContext) -> PromptText:
         self.calls += 1
         if self._prompts:
-            return Prompt(text=self._prompts.popleft())
-        return Prompt(text=f"{ctx.current_prompt} [improved v{self.calls}]")
+            return PromptText(text=self._prompts.popleft())
+        return PromptText(text=f"{ctx.current_prompt} [improved v{self.calls}]")
 
 
 class FakeSummarizer(Summarizer):
     """Deterministic merge: first-seen strengths/weaknesses, joined reasoning."""
 
     async def summarize(
-        self, evaluations: list[PromptEvaluation]
+        self,
+        evaluations: list[PromptEvaluation],
+        llm_runner=None,
     ) -> EvaluationSummary:
         strengths: list[str] = []
         weaknesses: list[str] = []

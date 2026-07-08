@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Optimization Steps — Prompt Optimizer{% endblock %}
+{% block title %}Optimization Iterations — Prompt Optimizer{% endblock %}
 {% block content %}
 <div class="section-head">
-  <h1>Optimization steps <code>{{ run_id[:8] }}</code></h1>
+  <h1>Optimization iterations <code>{{ run_id[:8] }}</code></h1>
   <div class="actions">
     <a class="btn" href="/runs/{{ run_id }}">Run progress</a>
-    <a class="btn" href="/states/{{ run.state_id }}">State</a>
+    <a class="btn" href="/prompts/{{ run.prompt_id }}">Prompt</a>
   </div>
 </div>
 
@@ -33,12 +33,31 @@
       </td>
       <td>{{ (s.test_case_ids or [])|length }}</td>
       <td class="truncate muted">{{ (s.summarized_reasoning or '')[:120] }}</td>
-      <td><a class="btn small" href="/steps/{{ s.id }}">Detail</a></td>
+      <td><a class="btn small" href="/iterations/{{ s.id }}">Detail</a></td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
 {% else %}
-<p class="muted">No steps yet — the run may still be in progress.</p>
+<p class="muted">No iterations yet — the run may still be in progress.</p>
 {% endif %}
+
+<section>
+  <h2>Prompt versions saved by this run</h2>
+  {% if versions %}
+  <table>
+    <thead><tr><th>Version</th><th>Avg score</th><th>Saved</th><th></th></tr></thead>
+    <tbody>
+      {% for v in versions %}
+      <tr>
+        <td>v{{ v.version_number }}</td>
+        <td>{% if v.avg_score is not none %}<span class="score">{{ '%.2f'|format(v.avg_score) }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td class="muted">{{ v.created_at }}</td>
+        <td><a class="btn small" href="/prompts/{{ v.prompt_id }}/versions/{{ v.id }}">Details</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted">No versions saved — versions are preserved when an iteration is accepted.</p>{% endif %}
+</section>
 {% endblock %}

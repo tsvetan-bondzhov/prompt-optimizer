@@ -12,7 +12,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Default optimizer system prompt. Kept as an easily editable module-level
 # constant per the implementation plan (§8).
-DEFAULT_IMPROVER_SYSTEM_PROMPT = (
+DEFAULT_OPTIMIZER_SYSTEM_PROMPT = (
     "You are an expert prompt engineer. Given a goal, the current prompt, its "
     "measured strengths and weaknesses, the current average score, and the "
     "reasoning behind it, produce an improved prompt that better satisfies the "
@@ -36,20 +36,31 @@ class Settings(BaseSettings):
 
     # --- Active registry implementations ---------------------------------
     ACTIVE_EXECUTOR: str = "default"
-    ACTIVE_IMPROVER: str = "claude_code"
+    ACTIVE_OPTIMIZER: str = "claude_code"
     ACTIVE_SUMMARIZER: str = "default"
     ACTIVE_LLM_RUNNER: str = "claude_code"
 
     # --- Claude Code CLI -------------------------------------------------
     CLAUDE_CLI_PATH: str = "claude"
 
+    # --- Ollama (local) ---------------------------------------------------
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_MODEL: str = "mistral"
+    OLLAMA_TIMEOUT_SECONDS: float = 120.0
+
     # --- Optimization / evaluation defaults ------------------------------
     DEFAULT_EXECUTIONS_PER_TEST_CASE: int = 1
     DEFAULT_TARGET_SCORE: float = 9.0
     DEFAULT_MAX_ITERATIONS: int = 10
 
+    # --- JSON evaluation steps --------------------------------------------
+    # When true, the JSON evaluation steps tolerate output wrapped in a
+    # Markdown code fence (```json ... ```). When false (default), pure JSON
+    # is expected and fenced output fails parsing (scores 1).
+    JSON_EVAL_ALLOW_MARKDOWN: bool = False
+
     # --- Optimizer prompt -------------------------------------------------
-    IMPROVER_SYSTEM_PROMPT: str = DEFAULT_IMPROVER_SYSTEM_PROMPT
+    OPTIMIZER_SYSTEM_PROMPT: str = DEFAULT_OPTIMIZER_SYSTEM_PROMPT
 
     # --- Logging ----------------------------------------------------------
     LOG_LEVEL: str = "INFO"
