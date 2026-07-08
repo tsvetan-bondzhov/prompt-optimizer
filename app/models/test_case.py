@@ -78,15 +78,6 @@ class _TestCaseFields(BaseModel):
         description="Runner-specific options for the executor's LLM runner "
         "(e.g. model, effort, temperature; empty values are ignored).",
     )
-    summarizer_llm_runner: str = Field(
-        default_factory=lambda: get_settings().ACTIVE_LLM_RUNNER,
-        min_length=1,
-        description="LLM runner used when summarizing this test case's results.",
-    )
-    summarizer_llm_runner_options: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Runner-specific options for the summarizer's LLM runner.",
-    )
 
     @field_validator("data", mode="before")
     @classmethod
@@ -99,7 +90,14 @@ class TestCaseCreate(_TestCaseFields):
 
 
 class TestCase(_TestCaseFields):
-    """A stored test case document."""
+    """A stored test case document.
+
+    Unknown keys are ignored (rather than rejected) so documents written by
+    older versions — e.g. with the since-moved ``summarizer_llm_runner``
+    fields — still validate.
+    """
+
+    model_config = ConfigDict(extra="ignore")
 
     id: str = Field(default_factory=new_id)
     created_at: datetime = Field(default_factory=utcnow)

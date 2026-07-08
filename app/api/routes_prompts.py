@@ -37,6 +37,8 @@ class PromptCreate(BaseModel):
     test_case_ids: list[str] = Field(default_factory=list)
     optimizer_llm_runner: Optional[str] = Field(default=None, min_length=1)
     optimizer_llm_runner_options: Optional[dict] = Field(default=None)
+    summarizer_llm_runner: Optional[str] = Field(default=None, min_length=1)
+    summarizer_llm_runner_options: Optional[dict] = Field(default=None)
 
 
 class PromptUpdate(BaseModel):
@@ -50,6 +52,8 @@ class PromptUpdate(BaseModel):
     test_case_ids: Optional[list[str]] = Field(default=None)
     optimizer_llm_runner: Optional[str] = Field(default=None, min_length=1)
     optimizer_llm_runner_options: Optional[dict] = Field(default=None)
+    summarizer_llm_runner: Optional[str] = Field(default=None, min_length=1)
+    summarizer_llm_runner_options: Optional[dict] = Field(default=None)
 
 
 async def _validate_test_case_ids(

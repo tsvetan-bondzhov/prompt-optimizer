@@ -22,7 +22,15 @@ from app.services.summarizer import SummarizerService
 from tests.fakes import FakeGrader, FakeExecutor, FakeOptimizer, FakeSummarizer
 
 
-async def make_env(db, scores, *, avg_score=None, progress=None):
+async def make_env(
+    db,
+    scores,
+    *,
+    avg_score=None,
+    progress=None,
+    summarizer_service=None,
+    prompt_fields=None,
+):
     """Build an optimizer wired to fakes, plus a persisted prompt + test case.
 
     ``scores`` scripts the single evaluation step: with one test case and
@@ -39,6 +47,7 @@ async def make_env(db, scores, *, avg_score=None, progress=None):
         current_prompt="base prompt",
         test_case_ids=[test_case.id],
         avg_score=avg_score,
+        **(prompt_fields or {}),
     )
     await PromptRepository(db).create(prompt.model_dump())
 
@@ -52,7 +61,7 @@ async def make_env(db, scores, *, avg_score=None, progress=None):
     )
     optimizer = OptimizerService(
         evaluator,
-        SummarizerService(summarizer_resolver=FakeSummarizer),
+        summarizer_service or SummarizerService(summarizer_resolver=FakeSummarizer),
         PromptRepository(db),
         OptimizationRunRepository(db),
         OptimizationStepRepository(db),
@@ -191,6 +200,35 @@ async def test_nested_evaluation_completion_does_not_terminate_run(db):
     # place before the emit), never a stale pre-iteration value.
     assert [getattr(e, "avg_score", None) for e in iterations] == [6.0, 7.0, 8.0]
     assert '"avg_score":' in iterations[-1].model_dump_json()
+
+
+async def test_summarizer_uses_prompt_runner_selection(db):
+    from app.models import EvaluationSummary
+
+    captured: list[tuple] = []
+
+    class SpySummarizerService:
+        async def summarize(
+            self, points, llm_runner_name=None, llm_runner_options=None
+        ):
+            captured.append((llm_runner_name, llm_runner_options))
+            return EvaluationSummary(reasoning="spy")
+
+    # Baseline (5) + one accepted iteration (9) — two summarize calls, both
+    # with the runner selected on the prompt.
+    optimizer, prompt = await make_env(
+        db,
+        scores=(5, 9),
+        summarizer_service=SpySummarizerService(),
+        prompt_fields={
+            "summarizer_llm_runner": "ollama",
+            "summarizer_llm_runner_options": {"model": "mistral"},
+        },
+    )
+    await optimizer.optimize(prompt.id, RunConfig(target_score=9, max_iterations=3))
+
+    assert len(captured) == 2
+    assert all(c == ("ollama", {"model": "mistral"}) for c in captured)
 
 
 async def test_missing_prompt_raises(db):

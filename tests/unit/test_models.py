@@ -65,6 +65,35 @@ def test_test_case_data_coerces_legacy_object():
     assert tc.data == [{"input": "x"}]
 
 
+def test_stored_test_case_ignores_legacy_summarizer_fields():
+    # summarizer_llm_runner moved to the prompt; documents written before the
+    # move must still validate (unknown keys are ignored, not rejected).
+    from app.models import TestCase
+
+    tc = TestCase.model_validate(
+        {
+            "name": "tc",
+            "summarizer_llm_runner": "ollama",
+            "summarizer_llm_runner_options": {"model": "mistral"},
+        }
+    )
+    assert not hasattr(tc, "summarizer_llm_runner")
+
+
+def test_prompt_carries_summarizer_runner_selection():
+    from app.models import Prompt
+
+    prompt = Prompt(
+        name="p",
+        goal="g",
+        current_prompt="text",
+        summarizer_llm_runner="ollama",
+        summarizer_llm_runner_options={"temperature": 0.1},
+    )
+    assert prompt.summarizer_llm_runner == "ollama"
+    assert prompt.summarizer_llm_runner_options == {"temperature": 0.1}
+
+
 def test_criteria_resolved_per_key_with_dataset_fallback():
     from app.models import TestCase
 

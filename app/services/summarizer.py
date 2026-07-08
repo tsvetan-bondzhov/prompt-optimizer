@@ -65,7 +65,7 @@ class SummarizerService:
             :class:`PromptEvaluation`. Points are flattened into their per-grader
             evaluations before delegation.
         :param llm_runner_name: Registered LLM runner to summarize with (from
-            the test case's ``summarizer_llm_runner``); ``None`` uses the
+            the prompt's ``summarizer_llm_runner``); ``None`` uses the
             active default.
         :param llm_runner_options: Runner-specific options bound to the
             resolved runner (from ``summarizer_llm_runner_options``).

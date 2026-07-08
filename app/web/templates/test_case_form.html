@@ -79,17 +79,6 @@
       </label>
       <div id="executor-runner-options" class="runner-options"></div>
     </div>
-    <div>
-      <label>LLM runner for the summarizer
-        <select name="summarizer_llm_runner">
-          {% set current_summarizer_runner = test_case.summarizer_llm_runner if test_case and test_case.summarizer_llm_runner else '' %}
-          {% for r in available_llm_runners %}
-          <option value="{{ r }}" {% if r == current_summarizer_runner %}selected{% endif %}>{{ r }}</option>
-          {% endfor %}
-        </select>
-      </label>
-      <div id="summarizer-runner-options" class="runner-options"></div>
-    </div>
   </div>
   <fieldset>
     <legend>Graders (executed for every data entry of this test case)</legend>
@@ -124,12 +113,6 @@
     "executor-runner-options",
     {{ (test_case.executor_llm_runner_options if test_case and test_case.executor_llm_runner_options is defined and test_case.executor_llm_runner_options else {})|tojson }},
     {{ (test_case.executor_llm_runner if test_case and test_case.executor_llm_runner else '')|tojson }}
-  );
-  initRunnerOptions(
-    "summarizer_llm_runner",
-    "summarizer-runner-options",
-    {{ (test_case.summarizer_llm_runner_options if test_case and test_case.summarizer_llm_runner_options is defined and test_case.summarizer_llm_runner_options else {})|tojson }},
-    {{ (test_case.summarizer_llm_runner if test_case and test_case.summarizer_llm_runner else '')|tojson }}
   );
 </script>
 <script>

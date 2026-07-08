@@ -93,15 +93,12 @@ def _runner_selection_fields(form: Any) -> dict[str, Any]:
     """Executor / LLM-runner selections + options from a test case form."""
 
     fields: dict[str, Any] = {}
-    for key in ("executor_name", "executor_llm_runner", "summarizer_llm_runner"):
+    for key in ("executor_name", "executor_llm_runner"):
         value = str(form.get(key, "")).strip()
         if value:
             fields[key] = value
     fields["executor_llm_runner_options"] = _runner_options(
         form, "executor_llm_runner"
-    )
-    fields["summarizer_llm_runner_options"] = _runner_options(
-        form, "summarizer_llm_runner"
     )
     return fields
 
@@ -259,9 +256,6 @@ async def test_case_import(
             executor_llm_runner_options=(
                 item.get("executor_llm_runner_options") or {}
             ),
-            summarizer_llm_runner_options=(
-                item.get("summarizer_llm_runner_options") or {}
-            ),
         )
         await repo.create(test_case.model_dump())
     return RedirectResponse("/test-cases", status_code=status.HTTP_303_SEE_OTHER)
@@ -357,13 +351,22 @@ async def prompt_create(
 ) -> RedirectResponse:
     form = await request.form()
     optimizer_runner = str(form.get("optimizer_llm_runner", "")).strip()
+    summarizer_runner = str(form.get("summarizer_llm_runner", "")).strip()
     prompt = Prompt(
         name=str(form.get("name", "")).strip(),
         goal=str(form.get("goal", "")).strip(),
         current_prompt=str(form.get("current_prompt", "")),
         test_case_ids=[str(v) for v in form.getlist("test_case_ids")],
         optimizer_llm_runner_options=_runner_options(form, "optimizer_llm_runner"),
+        summarizer_llm_runner_options=_runner_options(
+            form, "summarizer_llm_runner"
+        ),
         **({"optimizer_llm_runner": optimizer_runner} if optimizer_runner else {}),
+        **(
+            {"summarizer_llm_runner": summarizer_runner}
+            if summarizer_runner
+            else {}
+        ),
     )
     await repo.create(prompt.model_dump())
     return RedirectResponse(
@@ -435,6 +438,12 @@ async def prompt_update(
         changes["optimizer_llm_runner"] = optimizer_runner
     changes["optimizer_llm_runner_options"] = _runner_options(
         form, "optimizer_llm_runner"
+    )
+    summarizer_runner = str(form.get("summarizer_llm_runner", "")).strip()
+    if summarizer_runner:
+        changes["summarizer_llm_runner"] = summarizer_runner
+    changes["summarizer_llm_runner_options"] = _runner_options(
+        form, "summarizer_llm_runner"
     )
     # A manually edited prompt invalidates the measured score/summary.
     if changes["current_prompt"] != existing.get("current_prompt"):

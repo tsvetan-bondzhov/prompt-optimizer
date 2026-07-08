@@ -32,7 +32,7 @@ from app.db.repositories import (
 )
 from app.models import PromptText, RunConfig, RunStatus, TestCase
 from app.services.evaluator import EvaluationRunResult, EvaluatorService
-from app.services.optimizer import OptimizerService, summarizer_runner_selection
+from app.services.optimizer import OptimizerService
 from app.services.progress import ProgressTracker
 from app.services.summarizer import SummarizerService
 
@@ -152,7 +152,7 @@ async def execute_evaluation_run(
             )
             if update_prompt and prompt_id is not None:
                 await _apply_evaluation_to_prompt(
-                    db, prompt_id, prompt_text, test_cases, result
+                    db, prompt_id, prompt_text, result
                 )
         except Exception as exc:  # noqa: BLE001 - background jobs must not raise
             logger.exception("Standalone evaluation run %s failed", run_id)
@@ -170,7 +170,6 @@ async def _apply_evaluation_to_prompt(
     db: AsyncIOMotorDatabase,
     prompt_id: str,
     prompt_text: str,
-    test_cases: list[TestCase],
     result: EvaluationRunResult,
 ) -> None:
     """Fold a standalone evaluation's outcome into the stored prompt.
@@ -178,13 +177,14 @@ async def _apply_evaluation_to_prompt(
     Mirrors the optimizer's baseline behaviour: the evaluated text becomes the
     current prompt (a no-op when it was not overridden), and the measured score
     and summarized strengths/weaknesses/reasoning replace the previous ones.
+    The summary uses the LLM runner selected on the prompt.
     """
 
-    runner_name, runner_options = summarizer_runner_selection(test_cases)
+    prompt_doc = await PromptRepository(db).get(prompt_id) or {}
     summary = await SummarizerService().summarize(
         result.points,
-        llm_runner_name=runner_name,
-        llm_runner_options=runner_options,
+        llm_runner_name=prompt_doc.get("summarizer_llm_runner"),
+        llm_runner_options=prompt_doc.get("summarizer_llm_runner_options") or {},
     )
     await PromptRepository(db).update(
         prompt_id,

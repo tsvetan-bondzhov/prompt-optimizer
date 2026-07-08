@@ -71,15 +71,17 @@ The suite runs entirely offline (mongomock + deterministic fakes; no LLM calls).
      `json_expected_match`, `word_count`, `tiktoken`, `model_grader`, …);
    - **executor**: radio buttons selecting how the prompt is run (`default`,
      `template`, `no_args`, `concat`, …), plus the **LLM runner** the
-     executor delegates to and the LLM runner used for summarization —
-     each with runner-specific options (model, effort, temperature).
+     executor delegates to, with runner-specific options (model, effort,
+     temperature).
    Every executor/grader shows a human-readable name with an ℹ info popup
    documenting its purpose, criteria keys, and a copy-pasteable sample.
    Bulk JSON import is supported.
 2. **Prompts** (`/prompts`) — the prompt management page: create, edit, and
    delete prompts. A prompt has a **name** (shown in reports and tables), a
-   goal, the current prompt text, linked test cases, and the LLM runner used
-   by the optimizer. The prompt tracks the best text found so far, its
+   goal, the current prompt text, linked test cases, and the LLM runners
+   used by the optimizer and by the summarizer (summaries span all of a
+   prompt's test cases, so the selection lives here rather than on the
+   test case). The prompt tracks the best text found so far, its
    average score, and the latest strengths/weaknesses summary. Superseded
    versions (text + average score) are kept: whenever the optimizer accepts
    an improved prompt the outgoing version is saved, and the prompt page

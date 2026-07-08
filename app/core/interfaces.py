@@ -148,8 +148,8 @@ class Summarizer(ABC):
     ) -> EvaluationSummary:
         """Merge ``evaluations`` into one :class:`EvaluationSummary`.
 
-        ``llm_runner`` is the runner selected for summarization (from the test
-        case's ``summarizer_llm_runner``); ``None`` means use the active
+        ``llm_runner`` is the runner selected for summarization (from the
+        prompt's ``summarizer_llm_runner``); ``None`` means use the active
         default. Non-LLM summarizers may ignore it.
         """
         raise NotImplementedError

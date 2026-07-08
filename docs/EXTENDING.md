@@ -19,7 +19,7 @@ Registry categories:
 | `grader` | `Grader` | per test case (`grader_names` checkboxes) |
 | `optimizer` | `PromptOptimizer` | `ACTIVE_OPTIMIZER` |
 | `summarizer` | `Summarizer` | `ACTIVE_SUMMARIZER` |
-| `llm_runner` | `LLMRunner` | per test case (`executor_llm_runner`, `summarizer_llm_runner`) and per prompt (`optimizer_llm_runner`); default `ACTIVE_LLM_RUNNER` |
+| `llm_runner` | `LLMRunner` | per test case (`executor_llm_runner`) and per prompt (`optimizer_llm_runner`, `summarizer_llm_runner`); default `ACTIVE_LLM_RUNNER` |
 | `aggregator` | `Aggregator` (callable) | — (default: mean) |
 
 ## 1. Implement a `PromptExecutor`
@@ -147,7 +147,8 @@ Both default implementations delegate to an `LLMRunner`, so usually you
 customize the *prompting*, not the transport. The optimizer uses the runner
 selected on the prompt (`Prompt.optimizer_llm_runner`, exposed through
 `OptimizationContext.llm_runner_name`); the summarizer receives the runner
-selected on the test case (`summarizer_llm_runner`).
+selected on the prompt (`summarizer_llm_runner` — one selection per prompt,
+since a summary spans all of its test cases).
 
 ```python
 from app.core.interfaces import PromptOptimizer

@@ -75,6 +75,18 @@ class Prompt(BaseModel):
         default_factory=dict,
         description="Runner-specific options for the optimizer's LLM runner.",
     )
+    summarizer_llm_runner: str = Field(
+        default_factory=lambda: get_settings().ACTIVE_LLM_RUNNER,
+        min_length=1,
+        description=(
+            "LLM runner used to summarize evaluation results for this prompt "
+            "(one selection per prompt — summaries span all its test cases)."
+        ),
+    )
+    summarizer_llm_runner_options: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Runner-specific options for the summarizer's LLM runner.",
+    )
     updated_at: datetime = Field(default_factory=utcnow)
 
 

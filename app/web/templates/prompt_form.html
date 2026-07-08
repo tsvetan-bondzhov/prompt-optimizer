@@ -25,6 +25,15 @@
     </select>
   </label>
   <div id="optimizer-runner-options" class="runner-options"></div>
+  <label>LLM runner for the summarizer
+    <select name="summarizer_llm_runner">
+      {% set current_summarizer_runner = prompt.summarizer_llm_runner if prompt and prompt.summarizer_llm_runner is defined and prompt.summarizer_llm_runner else '' %}
+      {% for r in available_llm_runners %}
+      <option value="{{ r }}" {% if r == current_summarizer_runner %}selected{% endif %}>{{ r }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <div id="summarizer-runner-options" class="runner-options"></div>
   <fieldset>
     <legend>Test cases</legend>
     {% if test_cases %}
@@ -56,6 +65,12 @@
     "optimizer-runner-options",
     {{ (prompt.optimizer_llm_runner_options if prompt and prompt.optimizer_llm_runner_options is defined and prompt.optimizer_llm_runner_options else {})|tojson }},
     {{ (prompt.optimizer_llm_runner if prompt and prompt.optimizer_llm_runner else '')|tojson }}
+  );
+  initRunnerOptions(
+    "summarizer_llm_runner",
+    "summarizer-runner-options",
+    {{ (prompt.summarizer_llm_runner_options if prompt and prompt.summarizer_llm_runner_options is defined and prompt.summarizer_llm_runner_options else {})|tojson }},
+    {{ (prompt.summarizer_llm_runner if prompt and prompt.summarizer_llm_runner is defined and prompt.summarizer_llm_runner else '')|tojson }}
   );
 </script>
 {% endblock %}
